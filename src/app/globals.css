@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f3ef;
+  --foreground: #182126;
+  --muted: #6b7278;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: #ece7df;
+  --surface-hover: #e4ddd3;
+  --line: rgba(24, 33, 38, 0.09);
+  --accent: #2f6a60;
+  --accent-strong: #25564e;
+  --accent-soft: rgba(47, 106, 96, 0.12);
+  --accent-foreground: #f5faf8;
+  --success: #2e7651;
+  --success-soft: rgba(46, 118, 81, 0.12);
+  --warning: #a0641b;
+  --warning-soft: rgba(160, 100, 27, 0.12);
+  --danger: #9d3d36;
+  --danger-soft: rgba(157, 61, 54, 0.12);
+}
+
+.dark {
+  --background: #0f1619;
+  --foreground: #f4f4ef;
+  --muted: #a3adb2;
+  --surface: rgba(18, 25, 29, 0.9);
+  --surface-strong: #172127;
+  --surface-hover: #1f2a30;
+  --line: rgba(244, 244, 239, 0.08);
+  --accent: #72b7aa;
+  --accent-strong: #5fa194;
+  --accent-soft: rgba(114, 183, 170, 0.14);
+  --accent-foreground: #0e1416;
+  --success: #7cca9b;
+  --success-soft: rgba(124, 202, 155, 0.14);
+  --warning: #f0bc73;
+  --warning-soft: rgba(240, 188, 115, 0.14);
+  --danger: #f28d86;
+  --danger-soft: rgba(242, 141, 134, 0.14);
 }
 
 @theme inline {
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-newsreader);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(47, 106, 96, 0.09), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(24, 33, 38, 0.06), transparent 28%),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-manrope), sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+main,
+section,
+aside,
+header {
+  animation: fade-in 220ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
