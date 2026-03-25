@@ -143,53 +143,85 @@ export default function TeamPage() {
           </div>
         </Surface>
       ) : (
-        <Surface className="p-6 border-dashed border-2">
-          <p className="text-sm text-[var(--muted)] text-center">
-            Only the workspace owner can invite new members.
-          </p>
+        <Surface className="p-0 overflow-hidden border-[var(--accent)] border-2">
+          <div className="bg-[var(--accent)] p-4 text-white">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <UserIcon className="h-5 w-5" />
+              Workspace Owner
+            </h2>
+            <p className="text-sm opacity-90">
+              This workspace is managed and owned by the user below.
+            </p>
+          </div>
+          <div className="p-6">
+            {membersList.filter(m => m.role === 'owner').map((member) => (
+              <div key={member.uid} className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="h-20 w-20 flex-shrink-0 bg-[var(--accent-muted)] rounded-full flex items-center justify-center text-[var(--accent)] font-bold text-3xl border-4 border-[var(--accent)] shadow-inner">
+                  {member.displayName ? member.displayName[0].toUpperCase() : member.email[0].toUpperCase()}
+                </div>
+                <div className="flex-1 text-center sm:text-left space-y-1">
+                  <h3 className="text-2xl font-bold text-[var(--foreground)]">
+                    {member.displayName || "Workspace Owner"}
+                  </h3>
+                  <p className="text-[var(--muted)] flex items-center justify-center sm:justify-start gap-2">
+                    <span className="font-medium">{member.email}</span>
+                    <span className="h-1 w-1 rounded-full bg-[var(--line)]" />
+                    <span>Member since {formatDate(member.joinedAt)}</span>
+                  </p>
+                  <div className="pt-2">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--accent)]">
+                      Administrator
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </Surface>
       )}
 
       <div className="space-y-12">
-        {/* Workspace Owner Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--muted)]">Workspace Owner</h3>
-            <div className="h-px flex-1 bg-[var(--line)] opacity-50" />
-          </div>
-          <div className="max-w-md">
-            {membersList.filter(m => m.role === 'owner').map((member) => (
-              <Surface key={member.uid} className="p-5 flex flex-col gap-3 border-l-4 border-l-[var(--accent)] shadow-md">
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 flex-shrink-0 bg-[var(--accent-muted)] rounded-full flex items-center justify-center text-[var(--accent)] font-bold text-xl border-2 border-[var(--accent)]">
-                    {member.displayName ? member.displayName[0].toUpperCase() : member.email[0].toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-base font-bold text-[var(--foreground)] truncate">
-                        {member.displayName || "Unknown User"}
-                      </h4>
-                      {member.uid === user?.uid && (
-                        <span className="text-[10px] font-bold bg-[var(--accent)] text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">You</span>
-                      )}
+        {/* Workspace Owner Section - Only shown for owners here because members see a prominent card at the top */}
+        {isOwner && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--muted)]">Workspace Owner</h3>
+              <div className="h-px flex-1 bg-[var(--line)] opacity-50" />
+            </div>
+            <div className="max-w-md">
+              {membersList.filter(m => m.role === 'owner').map((member) => (
+                <Surface key={member.uid} className="p-5 flex flex-col gap-3 border-l-4 border-l-[var(--accent)] shadow-md">
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 flex-shrink-0 bg-[var(--accent-muted)] rounded-full flex items-center justify-center text-[var(--accent)] font-bold text-xl border-2 border-[var(--accent)]">
+                      {member.displayName ? member.displayName[0].toUpperCase() : member.email[0].toUpperCase()}
                     </div>
-                    <p className="text-sm text-[var(--muted)] truncate">
-                      {member.email}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-bold text-[var(--foreground)] truncate">
+                          {member.displayName || "Unknown User"}
+                        </h4>
+                        {member.uid === user?.uid && (
+                          <span className="text-[10px] font-bold bg-[var(--accent)] text-white px-1.5 py-0.5 rounded uppercase tracking-tighter">You</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-[var(--muted)] truncate">
+                        {member.email}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-xs text-[var(--muted)] border-t border-[var(--line)] pt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="capitalize px-2 py-1 bg-[var(--accent-muted)] text-[var(--accent)] rounded-full font-semibold">
-                      Owner
-                    </span>
+                  <div className="mt-2 flex items-center justify-between text-xs text-[var(--muted)] border-t border-[var(--line)] pt-3">
+                    <div className="flex items-center gap-2">
+                      <span className="capitalize px-2 py-1 bg-[var(--accent-muted)] text-[var(--accent)] rounded-full font-semibold">
+                        Owner
+                      </span>
+                    </div>
+                    <span>Joined {formatDate(member.joinedAt)}</span>
                   </div>
-                  <span>Joined {formatDate(member.joinedAt)}</span>
-                </div>
-              </Surface>
-            ))}
+                </Surface>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Team Members Section */}
         <div className="space-y-4">

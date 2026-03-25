@@ -1,16 +1,17 @@
-# Project Manifest - Directory Cleanup and Organization
+# Project Manifest - Team Section Enhancement
 
 ## 1. Project Goal
-Professionally organize the project directory by removing all non-essential and redundant files (notes, logs, and generated build artifacts) to ensure a clean source-controlled workspace.
+Enhance the Team section so that team members can see who the owner of the workspace is, providing a reciprocal view to the existing member list visible to owners.
 
 ## 2. Actionable Task List
-- [x] Review current directory structure [TASK-ID: 1]
-- [x] Create Implementation Plan [TASK-ID: 2]
-- [x] Identify and confirm unnecessary files for removal [TASK-ID: 3]
-- [x] Execute cleanup: Remove logs, notes, and build artifacts [TASK-ID: 4]
-- [x] Verify project integrity (build check) [TASK-ID: 5]
-- [x] Finalize `manifest.md` [TASK-ID: 6]
-- [/] Push changes to GitHub [TASK-ID: 7]
+- [x] Research current Team page and ownership logic [TASK-ID: 1]
+- [x] Design and implement "Owner" visibility for members [TASK-ID: 2]
+    - [x] Add "Workspace Context" card for non-owner members at the top of the Team page.
+    - [x] Refine "Workspace Owner" card styling for better visibility.
+    - [x] Add "You" badge and role clarity for the current user in the members list.
+- [x] Verify changes in development [TASK-ID: 3]
+- [x] Deploy updated version to Firebase [TASK-ID: 4]
+- [x] Update documentation [TASK-ID: 5]
 
 ## 3. Dependency Map
 - TASK-ID: 1, 2 -> Prerequisite for execution.
@@ -29,4 +30,4 @@ Professionally organize the project directory by removing all non-essential and 
 ---
 ## 6. Execution Log
 - [2026-03-25] Initial review and planning completed.
-- [2026-03-25] Cleanup executed and project verified with successful build.
+- [2026-03-25] Cleanup executed, project verified with successful build, changes pushed to GitHub (`workhub-intellirev`), and deployed live to Firebase.
