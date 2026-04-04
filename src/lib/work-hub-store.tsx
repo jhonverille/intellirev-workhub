@@ -28,6 +28,7 @@ import type {
   ThemePreference,
   WorkspaceData,
   WorkspaceSettings,
+  ActivityEvent,
 } from "@/lib/types";
 import { makeId } from "@/lib/utils";
 import { auth, db, googleProvider } from "./firebase";
@@ -38,7 +39,7 @@ import {
   signOut as firebaseSignOut,
   type User,
 } from "firebase/auth";
-import { doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 
 type WorkspaceContextValue = {
   data: WorkspaceData;
@@ -73,6 +74,7 @@ type WorkspaceContextValue = {
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   isSyncing: boolean;
+  isAuthenticating: boolean;
   authError: string | null;
   clearAuthError: () => void;
   currentWorkspaceId: string | null;
@@ -314,6 +316,39 @@ function stableHash(value: unknown): string {
   return `{${sorted.join(",")}}`;
 }
 
+/**
+ * Writes a single activity event to the `activity` subcollection of the workspace.
+ * Private items are never logged — the caller is responsible for this guard.
+ */
+function logActivity({
+  user,
+  workspaceId,
+  action,
+  entityType,
+  entityName,
+}: {
+  user: { uid: string; displayName: string | null; photoURL: string | null };
+  workspaceId: string;
+  action: ActivityEvent["action"];
+  entityType: ActivityEvent["entityType"];
+  entityName: string;
+  }) {
+  const activityRef = collection(db, "workspaces", workspaceId, "activity");
+  const event: Omit<ActivityEvent, "id"> = {
+    workspaceId,
+    userId: user.uid,
+    userDisplayName: user.displayName ?? "Unknown",
+    userPhotoURL: user.photoURL,
+    action,
+    entityType,
+    entityName,
+    timestamp: new Date().toISOString(),
+  };
+  addDoc(activityRef, event).catch((err) =>
+    console.warn("[WorkHub] Activity log write failed:", err),
+  );
+}
+
 export function WorkHubProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(workspaceReducer, {
     data: defaultWorkspaceData,
@@ -328,6 +363,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [remoteDataHash, setRemoteDataHash] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
@@ -667,15 +703,19 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       toggleTaskCompletion: (id: string) => dispatch({ type: "toggle-task", payload: id }),
       createProject: (draft: ProjectDraft) => {
         const timestamp = new Date().toISOString();
+        const newId = makeId();
         dispatch({
           type: "upsert-project",
           payload: {
             ...draft,
-            id: makeId(),
+            id: newId,
             createdAt: timestamp,
             updatedAt: timestamp,
           },
         });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "created", entityType: "project", entityName: draft.name });
+        }
       },
       updateProject: (id: string, draft: ProjectDraft) => {
         const current = state.data.projects.find((project) => project.id === id);
@@ -692,10 +732,17 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: new Date().toISOString(),
           },
         });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "updated", entityType: "project", entityName: draft.name });
+        }
       },
       deleteProject: (id: string) => {
+        const project = state.data.projects.find((p) => p.id === id);
         dispatch({ type: "delete-project", payload: id });
         setLastDeletedItem({ type: "projects", id });
+        if (user && currentWorkspaceId && project && project.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "deleted", entityType: "project", entityName: project.name });
+        }
       },
       createNote: (draft: NoteDraft) => {
         const timestamp = new Date().toISOString();
@@ -708,6 +755,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: timestamp,
           },
         });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "created", entityType: "note", entityName: draft.title });
+        }
       },
       updateNote: (id: string, draft: NoteDraft) => {
         const current = state.data.notes.find((note) => note.id === id);
@@ -724,6 +774,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: new Date().toISOString(),
           },
         });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "updated", entityType: "note", entityName: draft.title });
+        }
       },
       deleteNote: (id: string) => {
         dispatch({ type: "delete-note", payload: id });
@@ -761,18 +814,11 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "delete-link", payload: id });
         setLastDeletedItem({ type: "links", id });
       },
-      restoreItem: (type, id) => {
-        dispatch({ type: "restore-item", payload: { type, id } });
-        if (lastDeletedItem?.id === id) setLastDeletedItem(null);
-      },
-      permanentDeleteItem: (type, id) => {
-        dispatch({ type: "permanent-delete", payload: { type, id } });
-        if (lastDeletedItem?.id === id) setLastDeletedItem(null);
-      },
-      emptyTrash: () => {
-        dispatch({ type: "empty-trash" });
-        setLastDeletedItem(null);
-      },
+      restoreItem: (type: keyof WorkspaceData["trash"], id: string) =>
+        dispatch({ type: "restore-item", payload: { type, id } }),
+      permanentDeleteItem: (type: keyof WorkspaceData["trash"], id: string) =>
+        dispatch({ type: "permanent-delete", payload: { type, id } }),
+      emptyTrash: () => dispatch({ type: "empty-trash" }),
       undoLastDeletion: () => {
         if (lastDeletedItem) {
           dispatch({ type: "restore-item", payload: lastDeletedItem });
@@ -794,18 +840,26 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       replaceData: (payload: WorkspaceData) => dispatch({ type: "replace", payload }),
       user,
       signIn: async () => {
+        if (isAuthenticating) return;
         setAuthError(null);
+        setIsAuthenticating(true);
         try {
           await signInWithPopup(auth, googleProvider);
         } catch (error: any) {
-          if (error.code === "auth/user-cancelled" || error.code === "auth/popup-closed-by-user") {
+          if (
+            error.code === "auth/user-cancelled" ||
+            error.code === "auth/popup-closed-by-user" ||
+            error.code === "auth/cancelled-popup-request"
+          ) {
             // User cancelled or closed the popup. No need to log a full error or show a scary message.
             console.log("[WorkHub] Sign-in cancelled by user.");
             return;
           }
-          
+
           console.error("Sign in failed", error);
           setAuthError(error.code || error.message || "An unknown authentication error occurred.");
+        } finally {
+          setIsAuthenticating(false);
         }
       },
       signOut: async () => {
@@ -816,6 +870,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
       },
       isSyncing,
+      isAuthenticating,
       authError,
       clearAuthError: () => setAuthError(null),
       currentWorkspaceId,
@@ -827,24 +882,11 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         // Otherwise check members list
         const memberRole = state.data.members?.[user.uid]?.role;
         if (memberRole) return memberRole;
-        // Default to owner ONLY if we don't have an ownerId yet (initial personal space)
-        return !state.data.ownerId ? "owner" : "assignee";
+        // Default to assignee if not found (shouldn't happen for active members)
+        return "assignee";
       })(),
     }),
-    [
-      state.data,
-      state.searchQuery,
-      initialized,
-      storageError,
-      resolvedTheme,
-      lastDeletedItem,
-      setLastDeletedItem,
-      user,
-      isSyncing,
-      authError,
-      currentWorkspaceId,
-      workspaceLoadError,
-    ],
+    [state, initialized, storageError, resolvedTheme, user, isSyncing, authError, currentWorkspaceId, workspaceLoadError, lastDeletedItem, isAuthenticating],
   );
 
   return (
@@ -856,10 +898,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
 export function useWorkHub() {
   const context = useContext(WorkspaceContext);
-
   if (!context) {
-    throw new Error("useWorkHub must be used within WorkHubProvider");
+    throw new Error("useWorkHub must be used within a WorkspaceProvider");
   }
-
   return context;
 }

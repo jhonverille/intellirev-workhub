@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useWorkHub } from "@/lib/work-hub-store";
-import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { useWorkHub } from "@/lib/work-hub-store";
 import { 
   LogIn, 
   LogOut, 
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 export function UserButton() {
-  const { user, signIn, signOut, isSyncing, authError, clearAuthError } = useWorkHub();
+  const { user, signIn, signOut, isSyncing, authError, clearAuthError, isAuthenticating } = useWorkHub();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -32,19 +32,40 @@ export function UserButton() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const formatAuthError = (error: string | null) => {
+    if (!error) return null;
+    if (error.includes("auth/popup-blocked")) {
+      return "The sign-in popup was blocked by your browser. Please allow popups for this site and try again.";
+    }
+    if (error.includes("auth/network-request-failed")) {
+      return "Network error. Please check your internet connection.";
+    }
+    if (error.includes("auth/internal-error")) {
+      return "An internal authentication error occurred. Please try again later.";
+    }
+    return error;
+  };
+
   if (!user) {
+    const displayError = formatAuthError(authError);
+
     return (
       <div className="relative flex flex-col items-end gap-2">
         <button
           onClick={() => signIn()}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all font-medium text-sm shadow-sm active:scale-95"
+          disabled={isAuthenticating}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium text-sm shadow-sm active:scale-95"
         >
-          <LogIn className="w-4 h-4" />
-          <span>Sign In</span>
+          {isAuthenticating ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <LogIn className="w-4 h-4" />
+          )}
+          <span>{isAuthenticating ? "Signing in..." : "Sign In"}</span>
         </button>
-
+ 
         <AnimatePresence>
-          {authError && (
+          {displayError && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -54,7 +75,7 @@ export function UserButton() {
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-bold mb-1">Sign-in Error</p>
-                <p className="opacity-90 leading-relaxed">{authError}</p>
+                <p className="opacity-90 leading-relaxed">{displayError}</p>
                 <button 
                   onClick={clearAuthError}
                   className="mt-2 text-[10px] underline font-bold uppercase tracking-wider hover:opacity-75 transition-opacity"
@@ -65,6 +86,7 @@ export function UserButton() {
               <button 
                 onClick={clearAuthError}
                 className="p-1 hover:bg-destructive/10 rounded-full transition-colors"
+                aria-label="Dismiss auth error notification"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -79,18 +101,20 @@ export function UserButton() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1 pr-3 rounded-full bg-muted/50 hover:bg-muted transition-all border border-border shadow-sm active:scale-95"
+        className={`flex items-center gap-2 p-1 pr-3 rounded-full transition-all border border-[var(--line)] shadow-sm active:scale-95 ${
+          isOpen ? "bg-[var(--surface-strong)]" : "bg-[var(--surface)] hover:bg-[var(--surface-strong)]"
+        }`}
       >
-        <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center border border-border">
+        <div className="w-8 h-8 rounded-full overflow-hidden bg-[var(--accent-soft)] flex items-center justify-center border border-[var(--line)]">
           {user.photoURL ? (
             <img src={user.photoURL} alt={user.displayName || "User"} className="w-full h-full object-cover" />
           ) : (
-            <UserIcon className="w-4 h-4 text-primary" />
+            <UserIcon className="w-4 h-4 text-[var(--accent)]" />
           )}
         </div>
-        <div className="flex flex-col items-start leading-none">
-          <span className="text-sm font-semibold truncate max-w-[100px]">
-            {user.displayName?.split(" ")[0] || "User"}
+        <div className="flex flex-col items-start leading-none pr-1">
+          <span className="text-sm font-semibold text-[var(--foreground)]">
+            {user.displayName || "User"}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
             {isSyncing ? (
@@ -111,7 +135,7 @@ export function UserButton() {
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 5, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-popover border border-border shadow-xl z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-background border border-border shadow-xl z-50 overflow-hidden"
           >
             <div className="p-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-3">
@@ -120,7 +144,7 @@ export function UserButton() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-bold">{user.displayName}</span>
-                  <span className="text-xs text-muted-foreground truncate max-w-[150px]">{user.email}</span>
+                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">{user.email}</span>
                 </div>
               </div>
             </div>
