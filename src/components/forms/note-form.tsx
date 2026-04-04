@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Field } from "@/components/forms/field";
 import { EyeIcon, PencilIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -8,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/ui/markdown";
+import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
 import { cn, normalizeTags } from "@/lib/utils";
 import type { Note, NoteDraft } from "@/lib/types";
 
@@ -24,6 +23,7 @@ export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
   const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [errors, setErrors] = useState<{ title?: string; content?: string }>({});
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -125,13 +125,21 @@ export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
       >
         {(fieldProps) =>
           mode === "edit" ? (
-            <Textarea
-              {...fieldProps}
-              className="min-h-52"
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="Write the note in Markdown. Use # for headers, - for lists, etc."
-            />
+            <div className="space-y-2">
+              <RichTextToolbar
+                textareaRef={textareaRef}
+                value={content}
+                onChange={setContent}
+              />
+              <Textarea
+                {...fieldProps}
+                ref={textareaRef}
+                className="min-h-52"
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                placeholder="Write the note in Markdown. Use the toolbar above or type # for headers, - for lists, etc."
+              />
+            </div>
           ) : (
             <div
               {...fieldProps}
