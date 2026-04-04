@@ -13,6 +13,8 @@ export type Task = {
   projectId: string | null;
   completed: boolean;
   assigneeIds: string[]; // Added for collaboration
+  visibility?: "public" | "private";
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,6 +26,8 @@ export type Project = {
   status: ProjectStatus;
   deadline: string | null;
   assigneeIds: string[]; // Added for collaboration
+  visibility?: "public" | "private";
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,6 +37,8 @@ export type Note = {
   title: string;
   content: string;
   tags: string[];
+  visibility?: "public" | "private";
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -42,6 +48,8 @@ export type QuickLink = {
   title: string;
   url: string;
   category: string;
+  visibility?: "public" | "private";
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 };

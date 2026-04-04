@@ -32,6 +32,7 @@ export function ProjectForm({
     toDateInputValue(initialValue?.deadline ?? null),
   );
   const [assigneeIds, setAssigneeIds] = useState<string[]>(initialValue?.assigneeIds ?? []);
+  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
   const [error, setError] = useState("");
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -49,6 +50,7 @@ export function ProjectForm({
       status,
       deadline: fromDateInputValue(deadline),
       assigneeIds,
+      visibility,
     });
   };
 
@@ -107,6 +109,19 @@ export function ProjectForm({
               value={deadline}
               onChange={(event) => setDeadline(event.target.value)}
             />
+          )}
+        </Field>
+        
+        <Field label="Privacy">
+          {(fieldProps) => (
+            <Select
+              {...fieldProps}
+              value={visibility}
+              onChange={(event) => setVisibility(event.target.value as "public" | "private")}
+            >
+              <option value="public">Public (Workspace)</option>
+              <option value="private">Private (Only You)</option>
+            </Select>
           )}
         </Field>
       </div>

@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -30,6 +31,7 @@ import type {
 } from "@/lib/types";
 import { makeId } from "@/lib/utils";
 import { auth, db, googleProvider } from "./firebase";
+import { usePathname } from "next/navigation";
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -330,6 +332,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
+  const pathname = usePathname();
+
+  // Clear auth error when the user navigates
+  useEffect(() => {
+    setAuthError(null);
+  }, [pathname]);
 
   // 1. Initial Local Storage Load
   useEffect(() => {
@@ -452,6 +460,11 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const stateDataRef = useRef(state.data);
+  useEffect(() => {
+    stateDataRef.current = state.data;
+  }, [state.data]);
+
   // 3. Workspace Sync (Remote -> Local)
   useEffect(() => {
     if (!user || !initialized || !currentWorkspaceId) {
@@ -460,29 +473,75 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
     }
 
     const wsDocRef = doc(db, "workspaces", currentWorkspaceId);
+    const privateWsRef = doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`);
     console.log("[WorkHub] Syncing workspace:", currentWorkspaceId);
     setIsSyncing(true);
 
-    return onSnapshot(wsDocRef, (snapshot) => {
+    let lastPublicData: WorkspaceData | null = null;
+    let lastPrivateData: WorkspaceData | null = null;
+
+    const mergeAndDispatch = () => {
+      if (!lastPublicData && !lastPrivateData) return;
+      
+      const base = lastPublicData || normalizeWorkspaceData({});
+      const priv = lastPrivateData || normalizeWorkspaceData({});
+
+      // Deduplicate arrays by ID to prevent transient key errors during sync race conditions
+      const dedupe = <T extends { id: string }>(arr1: T[], arr2: T[]) => {
+        const map = new Map<string, T>();
+        arr1.forEach(item => map.set(item.id, item));
+        // Private items take precedence if there happens to be a conflict
+        arr2.forEach(item => map.set(item.id, item));
+        return Array.from(map.values());
+      };
+
+      const mergedData: WorkspaceData = {
+        ...base,
+        tasks: dedupe(base.tasks, priv.tasks),
+        projects: dedupe(base.projects, priv.projects),
+        notes: dedupe(base.notes, priv.notes),
+        links: dedupe(base.links, priv.links),
+      };
+
+      const remoteHash = stableHash(mergedData);
+      const localHash = stableHash(stateDataRef.current);
+      
+      setRemoteDataHash(remoteHash);
+      if (remoteHash !== localHash) {
+        console.log("[WorkHub] Remote update detected. Merging.");
+        dispatch({ type: "replace", payload: mergedData });
+      }
+    };
+
+    const unsubPublic = onSnapshot(wsDocRef, (snapshot) => {
       if (snapshot.exists()) {
-        const remoteData = normalizeWorkspaceData(snapshot.data());
-        const remoteHash = stableHash(remoteData);
-        const localHash = stableHash(state.data);
-        
-        setRemoteDataHash(remoteHash);
-        if (remoteHash !== localHash) {
-          console.log("[WorkHub] Remote update detected. Merging.");
-          dispatch({ type: "replace", payload: remoteData });
-        }
+        lastPublicData = normalizeWorkspaceData(snapshot.data());
       } else {
         setWorkspaceLoadError("Workspace not found or access denied.");
       }
+      mergeAndDispatch();
       setIsSyncing(false);
     }, (err) => {
       console.error("[WorkHub] Workspace sync error:", err);
       setWorkspaceLoadError("Failed to connect to workspace.");
       setIsSyncing(false);
     });
+
+    const unsubPrivate = onSnapshot(privateWsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        lastPrivateData = normalizeWorkspaceData(snapshot.data());
+      } else {
+        lastPrivateData = normalizeWorkspaceData({});
+      }
+      mergeAndDispatch();
+    }, (err) => {
+      console.error("[WorkHub] Private workspace sync error:", err);
+    });
+
+    return () => {
+      unsubPublic();
+      unsubPrivate();
+    };
   }, [user, initialized, currentWorkspaceId]);
 
   // Persist to LocalStorage AND Firestore
@@ -498,9 +557,30 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       // Only push to Firestore if data changed locally (not from remote)
       if (user && currentWorkspaceId && stableHash(state.data) !== remoteDataHash) {
         setIsSyncing(true);
-        setDoc(doc(db, "workspaces", currentWorkspaceId), state.data, { merge: true }).finally(() =>
-          setIsSyncing(false),
-        );
+        
+        const baseData = state.data;
+        
+        const publicData: WorkspaceData = {
+          ...baseData,
+          tasks: baseData.tasks.filter(t => t.visibility !== "private"),
+          projects: baseData.projects.filter(p => p.visibility !== "private"),
+          notes: baseData.notes.filter(n => n.visibility !== "private"),
+          links: baseData.links.filter(l => l.visibility !== "private"),
+        };
+
+        const privateData: WorkspaceData = {
+          ...baseData,
+          members: {}, // Skip member array in private
+          tasks: baseData.tasks.filter(t => t.visibility === "private" && t.ownerId === user.uid),
+          projects: baseData.projects.filter(p => p.visibility === "private" && p.ownerId === user.uid),
+          notes: baseData.notes.filter(n => n.visibility === "private" && n.ownerId === user.uid),
+          links: baseData.links.filter(l => l.visibility === "private" && l.ownerId === user.uid),
+        };
+
+        const publicProm = setDoc(doc(db, "workspaces", currentWorkspaceId), publicData, { merge: true });
+        const privateProm = setDoc(doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`), privateData, { merge: true });
+        
+        Promise.all([publicProm, privateProm]).finally(() => setIsSyncing(false));
       }
     } catch {
       setStorageError(
@@ -539,10 +619,23 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       setSearchQuery: (payload: string) => dispatch({ type: "set-search", payload }),
       createTask: (draft: TaskDraft) => {
         const timestamp = new Date().toISOString();
+        let visibility = draft.visibility;
+        let ownerId = draft.ownerId;
+        
+        if (draft.projectId) {
+          const matchedProject = state.data.projects.find(p => p.id === draft.projectId);
+          if (matchedProject && matchedProject.visibility === "private") {
+            visibility = "private";
+            ownerId = matchedProject.ownerId;
+          }
+        }
+
         dispatch({
           type: "upsert-task",
           payload: {
             ...draft,
+            visibility,
+            ownerId,
             id: makeId(),
             completed: draft.completed ?? draft.status === "done",
             createdAt: timestamp,
@@ -705,6 +798,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         try {
           await signInWithPopup(auth, googleProvider);
         } catch (error: any) {
+          if (error.code === "auth/user-cancelled" || error.code === "auth/popup-closed-by-user") {
+            // User cancelled or closed the popup. No need to log a full error or show a scary message.
+            console.log("[WorkHub] Sign-in cancelled by user.");
+            return;
+          }
+          
           console.error("Sign in failed", error);
           setAuthError(error.code || error.message || "An unknown authentication error occurred.");
         }
