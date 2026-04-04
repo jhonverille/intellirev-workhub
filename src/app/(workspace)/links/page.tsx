@@ -24,7 +24,8 @@ import { useWorkHub } from "@/lib/work-hub-store";
 import { safeLower } from "@/lib/utils";
 
 export default function QuickLinksPage() {
-  const { data, searchQuery, createLink, updateLink, deleteLink } = useWorkHub();
+  const { data, user, userRole, searchQuery, createLink, updateLink, deleteLink } = useWorkHub();
+  const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -134,6 +135,7 @@ export default function QuickLinksPage() {
                 <EntityActions
                   onEdit={() => setEditingLink(link)}
                   onDelete={() => setLinkToDelete(link)}
+                  canEdit={isOwner || link.ownerId === user?.uid}
                 />
               </div>
             </Surface>

@@ -29,12 +29,14 @@ export default function TasksPage() {
   const {
     data,
     user,
+    userRole,
     searchQuery,
     createTask,
     updateTask,
     deleteTask,
     toggleTaskCompletion,
   } = useWorkHub();
+  const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -42,7 +44,6 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
-  const isOwner = user?.uid === data.ownerId;
   const viewableTasks = isOwner ? data.tasks : data.tasks.filter(t => t.assigneeIds?.includes(user?.uid ?? ""));
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
@@ -200,6 +201,7 @@ export default function TasksPage() {
                   <EntityActions
                     onEdit={() => setEditingTask(task)}
                     onDelete={() => setTaskToDelete(task)}
+                    canEdit={isOwner || task.ownerId === user?.uid}
                   />
                 </div>
               </Surface>
