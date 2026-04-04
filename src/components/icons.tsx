@@ -286,3 +286,104 @@ export function RotateCcwIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function LockIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </IconBase>
+  );
+}
+
+export function ActivityIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </IconBase>
+  );
+}
+
+export function BoldIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+      <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+    </IconBase>
+  );
+}
+
+export function ItalicIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="19" y1="4" x2="10" y2="4" />
+      <line x1="14" y1="20" x2="5" y2="20" />
+      <line x1="15" y1="4" x2="9" y2="20" />
+    </IconBase>
+  );
+}
+
+export function Heading1Icon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 12h8" />
+      <path d="M4 6v12" />
+      <path d="M12 6v12" />
+      <path d="M17 10l3-2v8" />
+    </IconBase>
+  );
+}
+
+export function Heading2Icon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 12h8" />
+      <path d="M4 6v12" />
+      <path d="M12 6v12" />
+      <path d="M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1" />
+    </IconBase>
+  );
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </IconBase>
+  );
+}
+
+export function ListOrderedIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="10" y1="6" x2="21" y2="6" />
+      <line x1="10" y1="12" x2="21" y2="12" />
+      <line x1="10" y1="18" x2="21" y2="18" />
+      <path d="M4 6h1v4" />
+      <path d="M4 10h2" />
+      <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+    </IconBase>
+  );
+}
+
+export function CodeIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </IconBase>
+  );
+}
+
+export function MinusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </IconBase>
+  );
+}

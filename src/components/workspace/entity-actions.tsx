@@ -6,6 +6,7 @@ type EntityActionsProps = {
   onDelete: () => void;
   editLabel?: string;
   deleteLabel?: string;
+  canEdit?: boolean;
 };
 
 export function EntityActions({
@@ -13,7 +14,10 @@ export function EntityActions({
   onDelete,
   editLabel = "Edit",
   deleteLabel = "Delete",
+  canEdit = true,
 }: EntityActionsProps) {
+  if (!canEdit) return null;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button

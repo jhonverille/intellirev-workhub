@@ -124,3 +124,15 @@ export type QuickLinkDraft = Omit<
   QuickLink,
   "id" | "createdAt" | "updatedAt"
 >;
+
+export type ActivityEvent = {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  userDisplayName: string;
+  userPhotoURL: string | null;
+  action: "created" | "updated" | "deleted" | "completed";
+  entityType: "project" | "task" | "note" | "link";
+  entityName: string;
+  timestamp: string;
+};

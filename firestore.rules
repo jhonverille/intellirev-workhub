@@ -28,6 +28,12 @@ service cloud.firestore {
 
       // Allow delete only if the user is the owner
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+
+      // Activity feed subcollection — members can read; members can add events (no update/delete)
+      match /activity/{eventId} {
+        allow read: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members.keys();
+        allow create: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members.keys();
+      }
     }
 
     match /private_workspaces/{docId} {
