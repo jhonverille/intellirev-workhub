@@ -8,6 +8,7 @@ import { EntityActions } from "@/components/workspace/entity-actions";
 import { FormDialog } from "@/components/workspace/form-dialog";
 import {
   FilterIcon,
+  LockIcon,
   NoteIcon,
   PlusIcon,
 } from "@/components/icons";
@@ -22,7 +23,8 @@ import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower, sortByUpdatedAt } from "@/lib/utils";
 
 export default function NotesPage() {
-  const { data, searchQuery, createNote, updateNote, deleteNote } = useWorkHub();
+  const { data, user, userRole, searchQuery, createNote, updateNote, deleteNote } = useWorkHub();
+  const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -81,9 +83,17 @@ export default function NotesPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-[var(--foreground)]">
-                      {note.title}
-                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h2 className="text-lg font-semibold text-[var(--foreground)]">
+                        {note.title}
+                      </h2>
+                      {note.visibility === "private" && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
+                          <LockIcon className="h-3 w-3" />
+                          Private
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm text-[var(--muted)]">
                       Updated {formatDate(note.updatedAt)}
                     </p>
@@ -108,6 +118,7 @@ export default function NotesPage() {
                 <EntityActions
                   onEdit={() => setEditingNote(note)}
                   onDelete={() => setNoteToDelete(note)}
+                  canEdit={isOwner || note.ownerId === user?.uid}
                 />
               </div>
             </Surface>

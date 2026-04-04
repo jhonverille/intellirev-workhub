@@ -11,6 +11,7 @@ import {
   CalendarIcon,
   FilterIcon,
   FolderIcon,
+  LockIcon,
   PlusIcon,
 } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
@@ -25,15 +26,15 @@ import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower } from "@/lib/utils";
 
 export default function ProjectsPage() {
-  const { data, user, searchQuery, createProject, updateProject, deleteProject } =
+  const { data, user, userRole, searchQuery, createProject, updateProject, deleteProject } =
     useWorkHub();
+  const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  const isOwner = user?.uid === data.ownerId;
   const viewableProjects = isOwner ? data.projects : data.projects.filter(p => p.assigneeIds?.includes(user?.uid ?? ""));
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
@@ -132,6 +133,12 @@ export default function ProjectsPage() {
                       <Badge tone={getProjectStatusTone(project.status)}>
                         {project.status}
                       </Badge>
+                      {project.visibility === "private" && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
+                          <LockIcon className="h-3 w-3" />
+                          Private
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm leading-6 text-[var(--muted)]">
                       {project.description || "No description yet."}
@@ -140,6 +147,7 @@ export default function ProjectsPage() {
                   <EntityActions
                     onEdit={() => setEditingProject(project)}
                     onDelete={() => setProjectToDelete(project)}
+                    canEdit={isOwner || project.ownerId === user?.uid}
                   />
                 </div>
 

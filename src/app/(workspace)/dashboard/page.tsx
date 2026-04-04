@@ -6,6 +6,7 @@ import {
   ClockIcon,
   FolderIcon,
   LinkIcon,
+  LockIcon,
   NoteIcon,
   SparkIcon,
 } from "@/components/icons";
@@ -14,15 +15,16 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { Markdown } from "@/components/ui/markdown";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { Surface } from "@/components/ui/surface";
+import { ActivityFeed } from "@/components/workspace/activity-feed";
 import { projectStatuses } from "@/lib/navigation";
 import { getProjectStatusTone, getTaskStatusTone } from "@/lib/presentation";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, formatRelativeDate, sortByUpdatedAt } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { data, user } = useWorkHub();
+  const { data, user, userRole, currentWorkspaceId } = useWorkHub();
 
-  const isOwner = user?.uid === data.ownerId;
+  const isOwner = userRole === "owner";
   const viewableProjects = isOwner ? data.projects : data.projects.filter(p => p.assigneeIds?.includes(user?.uid ?? ""));
   const viewableTasks = isOwner ? data.tasks : data.tasks.filter(t => t.assigneeIds?.includes(user?.uid ?? ""));
 
@@ -53,7 +55,7 @@ export default function DashboardPage() {
       <SectionHeader
         eyebrow="Overview"
         title="Your work in one place"
-        description="Keep momentum visible with today’s focus, recent activity, and a quick read on the projects that still need attention."
+        description="Keep momentum visible with today's focus, recent activity, and a quick read on the projects that still need attention."
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -193,11 +195,19 @@ export default function DashboardPage() {
                 className="flex flex-col gap-3 rounded-[24px] border border-[var(--line)] p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="space-y-1">
-                  <p className="font-semibold text-[var(--foreground)]">{task.title}</p>
-                  <p className="text-sm text-[var(--muted)]">
-                    Updated {formatRelativeDate(task.updatedAt)}
-                  </p>
-                </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-[var(--foreground)]">{task.title}</p>
+                      {task.visibility === "private" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--warning)]">
+                          <LockIcon className="h-3 w-3" />
+                          Private
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-[var(--muted)]">
+                      Updated {formatRelativeDate(task.updatedAt)}
+                    </p>
+                  </div>
                 <Badge tone={getTaskStatusTone(task.status)}>{task.status}</Badge>
               </div>
             ))}
@@ -223,11 +233,19 @@ export default function DashboardPage() {
                 className="rounded-[24px] border border-[var(--line)] p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-[var(--foreground)]">{note.title}</p>
-                  <span className="text-sm text-[var(--muted)]">
-                    {formatDate(note.updatedAt)}
-                  </span>
-                </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-[var(--foreground)]">{note.title}</p>
+                      {note.visibility === "private" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--warning)]">
+                          <LockIcon className="h-3 w-3" />
+                          Private
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm text-[var(--muted)]">
+                      {formatDate(note.updatedAt)}
+                    </span>
+                  </div>
                 <Markdown 
                   content={note.content} 
                   className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--muted)]" 
@@ -244,6 +262,14 @@ export default function DashboardPage() {
           </div>
         </Surface>
       </section>
+
+      {currentWorkspaceId && (
+        <section>
+          <Surface className="p-6">
+            <ActivityFeed workspaceId={currentWorkspaceId} />
+          </Surface>
+        </section>
+      )}
     </div>
   );
 }
