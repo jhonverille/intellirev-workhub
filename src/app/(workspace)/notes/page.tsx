@@ -35,8 +35,12 @@ export default function NotesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
+  const viewableNotes = data.notes.filter(
+    (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
+  );
+
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
-  const notes = sortByUpdatedAt(data.notes).filter((note) => {
+  const notes = sortByUpdatedAt(viewableNotes).filter((note) => {
     const haystack = [note.title, note.content, note.tags.join(" ")].join(" ");
     return query ? haystack.toLocaleLowerCase().includes(query) : true;
   });

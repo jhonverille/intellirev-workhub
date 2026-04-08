@@ -21,14 +21,17 @@ import { cn } from "@/lib/utils";
 type TrashType = keyof WorkspaceData["trash"];
 
 export default function TrashPage() {
-  const { data, restoreItem, permanentDeleteItem, emptyTrash } = useWorkHub();
+  const { data, user, restoreItem, permanentDeleteItem, emptyTrash } = useWorkHub();
   const [filter, setFilter] = useState<TrashType | "all">("all");
 
+  const isVisible = (item: any) =>
+    item.visibility !== "private" || item.ownerId === user?.uid || item.assigneeIds?.includes(user?.uid ?? "");
+
   const trashItems = [
-    ...data.trash.tasks.map((item) => ({ ...item, type: "tasks" as TrashType })),
-    ...data.trash.projects.map((item) => ({ ...item, type: "projects" as TrashType })),
-    ...data.trash.notes.map((item) => ({ ...item, type: "notes" as TrashType })),
-    ...data.trash.links.map((item) => ({ ...item, type: "links" as TrashType })),
+    ...data.trash.tasks.filter(isVisible).map((item) => ({ ...item, type: "tasks" as TrashType })),
+    ...data.trash.projects.filter(isVisible).map((item) => ({ ...item, type: "projects" as TrashType })),
+    ...data.trash.notes.filter(isVisible).map((item) => ({ ...item, type: "notes" as TrashType })),
+    ...data.trash.links.filter(isVisible).map((item) => ({ ...item, type: "links" as TrashType })),
   ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const filteredItems = filter === "all" ? trashItems : trashItems.filter((i) => i.type === filter);

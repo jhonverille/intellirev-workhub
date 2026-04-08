@@ -24,10 +24,15 @@ import { formatDate, formatRelativeDate, sortByUpdatedAt } from "@/lib/utils";
 export default function DashboardPage() {
   const { data, user, userRole, currentWorkspaceId } = useWorkHub();
 
-  const isOwner = userRole === "owner";
-  const viewableProjects = isOwner ? data.projects : data.projects.filter(p => p.assigneeIds?.includes(user?.uid ?? ""));
-  const viewableTasks = isOwner ? data.tasks : data.tasks.filter(t => t.assigneeIds?.includes(user?.uid ?? ""));
-
+  const viewableProjects = data.projects.filter(
+    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
+  );
+  const viewableTasks = data.tasks.filter(
+    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+  );
+  const viewableNotes = data.notes.filter(
+    (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
+  );
   const activeProjects = viewableProjects.filter((project) => project.status === "active");
   const focusTasks = [...viewableTasks]
     .filter((task) => !task.completed)
@@ -44,7 +49,7 @@ export default function DashboardPage() {
     .slice(0, 3);
 
   const recentTasks = sortByUpdatedAt(viewableTasks).slice(0, 4);
-  const recentNotes = sortByUpdatedAt(data.notes).slice(0, 3);
+  const recentNotes = sortByUpdatedAt(viewableNotes).slice(0, 3);
   const projectsByStatus = projectStatuses.map((status) => ({
     status,
     count: viewableProjects.filter((project) => project.status === status).length,
@@ -73,7 +78,7 @@ export default function DashboardPage() {
         />
         <SummaryCard
           label="Notes"
-          value={String(data.notes.length)}
+          value={String(viewableNotes.length)}
           meta="Reference and reflection together"
           icon={<NoteIcon />}
         />

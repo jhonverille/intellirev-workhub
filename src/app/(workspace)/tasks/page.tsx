@@ -48,7 +48,9 @@ export default function TasksPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  const viewableTasks = isOwner ? data.tasks : data.tasks.filter(t => t.assigneeIds?.includes(user?.uid ?? ""));
+  const viewableTasks = data.tasks.filter(
+    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+  );
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const tasks = sortByUpdatedAt(viewableTasks).filter((task) => {
