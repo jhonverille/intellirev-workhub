@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActions } from "@/components/workspace/bulk-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/forms/field";
 import { LinkForm } from "@/components/forms/link-form";
@@ -24,13 +26,14 @@ import { useWorkHub } from "@/lib/work-hub-store";
 import { safeLower } from "@/lib/utils";
 
 export default function QuickLinksPage() {
-  const { data, user, userRole, searchQuery, createLink, updateLink, deleteLink } = useWorkHub();
+  const { data, user, userRole, searchQuery, createLink, updateLink, deleteLinks } = useWorkHub();
   const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<QuickLink | null>(null);
-  const [linkToDelete, setLinkToDelete] = useState<QuickLink | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const categories = Array.from(new Set(data.links.map((link) => link.category))).sort();
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
@@ -46,6 +49,24 @@ export default function QuickLinksPage() {
 
     return matchesQuery && matchesCategory;
   });
+
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === links.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(links.map((l) => l.id)));
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -91,6 +112,16 @@ export default function QuickLinksPage() {
         }
       />
 
+      {links.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <Checkbox
+            checked={selectedIds.size === links.length && links.length > 0}
+            onChange={toggleAll}
+          />
+          <span className="text-sm font-medium text-[var(--muted)]">Select all visible</span>
+        </div>
+      )}
+
       {data.links.length === 0 ? (
         <EmptyState
           icon={<LinkIcon className="h-5 w-5" />}
@@ -113,8 +144,15 @@ export default function QuickLinksPage() {
           {links.map((link) => (
             <Surface key={link.id} className="p-5">
               <div className="flex items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="space-y-1">
+                <div className="flex gap-4">
+                  <div className="pt-1">
+                    <Checkbox
+                      checked={selectedIds.has(link.id)}
+                      onChange={() => toggleSelection(link.id)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-[var(--foreground)]">
                         {link.title}
@@ -132,16 +170,27 @@ export default function QuickLinksPage() {
                     </a>
                   </div>
                 </div>
-                <EntityActions
-                  onEdit={() => setEditingLink(link)}
-                  onDelete={() => setLinkToDelete(link)}
-                  canEdit={isOwner || link.ownerId === user?.uid}
-                />
               </div>
+              <EntityActions
+                onEdit={() => setEditingLink(link)}
+                onDelete={() => {
+                  setSelectedIds(new Set([link.id]));
+                  setIsBulkDeleteOpen(true);
+                }}
+                canEdit={isOwner || link.ownerId === user?.uid}
+              />
+            </div>
             </Surface>
           ))}
         </div>
       )}
+
+      <BulkActions
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setIsBulkDeleteOpen(true)}
+        noun="link"
+      />
 
       <FormDialog
         open={isCreateOpen}
@@ -181,15 +230,19 @@ export default function QuickLinksPage() {
       </FormDialog>
 
       <ConfirmDialog
-        open={Boolean(linkToDelete)}
-        title="Delete link"
-        description={`Delete "${linkToDelete?.title ?? "this link"}"?`}
-        onCancel={() => setLinkToDelete(null)}
+        open={isBulkDeleteOpen}
+        title={`Delete ${selectedIds.size === 1 ? "link" : "links"}`}
+        description={`Are you sure you want to delete ${
+          selectedIds.size === 1 ? "this link" : `${selectedIds.size} links`
+        }? They will be moved to the Recycle Bin.`}
+        onCancel={() => {
+          setIsBulkDeleteOpen(false);
+          if (selectedIds.size === 1) setSelectedIds(new Set());
+        }}
         onConfirm={() => {
-          if (linkToDelete) {
-            deleteLink(linkToDelete.id);
-          }
-          setLinkToDelete(null);
+          deleteLinks(Array.from(selectedIds));
+          setSelectedIds(new Set());
+          setIsBulkDeleteOpen(false);
         }}
       />
     </div>

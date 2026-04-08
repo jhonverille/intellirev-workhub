@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActions } from "@/components/workspace/bulk-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NoteForm } from "@/components/forms/note-form";
 import { CollectionToolbar } from "@/components/workspace/collection-toolbar";
@@ -21,20 +23,41 @@ import { Markdown } from "@/components/ui/markdown";
 import type { Note } from "@/lib/types";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower, sortByUpdatedAt } from "@/lib/utils";
+import { AttributionRow } from "@/components/workspace/attribution-row";
 
 export default function NotesPage() {
-  const { data, user, userRole, searchQuery, createNote, updateNote, deleteNote } = useWorkHub();
+  const { data, user, userRole, searchQuery, createNote, updateNote, deleteNotes } = useWorkHub();
   const isOwner = userRole === "owner";
+  const members = Object.values(data.members || {}).filter(m => m.uid !== user?.uid);
   const [localSearch, setLocalSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const notes = sortByUpdatedAt(data.notes).filter((note) => {
     const haystack = [note.title, note.content, note.tags.join(" ")].join(" ");
     return query ? haystack.toLocaleLowerCase().includes(query) : true;
   });
+
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === notes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(notes.map((n) => n.id)));
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -59,6 +82,16 @@ export default function NotesPage() {
         onReset={() => setLocalSearch("")}
       />
 
+      {notes.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <Checkbox
+            checked={selectedIds.size === notes.length && notes.length > 0}
+            onChange={toggleAll}
+          />
+          <span className="text-sm font-medium text-[var(--muted)]">Select all visible</span>
+        </div>
+      )}
+
       {data.notes.length === 0 ? (
         <EmptyState
           icon={<NoteIcon className="h-5 w-5" />}
@@ -81,9 +114,16 @@ export default function NotesPage() {
           {notes.map((note) => (
             <Surface key={note.id} className="p-5">
               <div className="flex items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                <div className="flex gap-4">
+                  <div className="pt-1">
+                    <Checkbox
+                      checked={selectedIds.has(note.id)}
+                      onChange={() => toggleSelection(note.id)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                       <h2 className="text-lg font-semibold text-[var(--foreground)]">
                         {note.title}
                       </h2>
@@ -113,18 +153,37 @@ export default function NotesPage() {
                       <Badge tone="neutral">No tags</Badge>
                     )}
                   </div>
+
+                  <AttributionRow
+                    ownerId={note.ownerId}
+                    assigneeIds={note.assigneeIds}
+                    createdAt={note.createdAt}
+                    isPrivate={note.visibility === "private"}
+                    members={data.members || {}}
+                  />
                 </div>
 
-                <EntityActions
-                  onEdit={() => setEditingNote(note)}
-                  onDelete={() => setNoteToDelete(note)}
-                  canEdit={isOwner || note.ownerId === user?.uid}
-                />
+                  <EntityActions
+                    onEdit={() => setEditingNote(note)}
+                    onDelete={() => {
+                      setSelectedIds(new Set([note.id]));
+                      setIsBulkDeleteOpen(true);
+                    }}
+                    canEdit={note.ownerId === user?.uid}
+                  />
+                </div>
               </div>
             </Surface>
           ))}
         </div>
       )}
+
+      <BulkActions
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setIsBulkDeleteOpen(true)}
+        noun="note"
+      />
 
       <FormDialog
         open={isCreateOpen}
@@ -136,6 +195,7 @@ export default function NotesPage() {
         onClose={() => setIsCreateOpen(false)}
       >
         <NoteForm
+          members={members}
           onSubmit={(value) => {
             createNote(value);
             setIsCreateOpen(false);
@@ -156,6 +216,7 @@ export default function NotesPage() {
         {editingNote ? (
           <NoteForm
             initialValue={editingNote}
+            members={members}
             onSubmit={(value) => {
               updateNote(editingNote.id, value);
               setEditingNote(null);
@@ -166,15 +227,19 @@ export default function NotesPage() {
       </FormDialog>
 
       <ConfirmDialog
-        open={Boolean(noteToDelete)}
-        title="Delete note"
-        description={`Delete "${noteToDelete?.title ?? "this note"}"?`}
-        onCancel={() => setNoteToDelete(null)}
+        open={isBulkDeleteOpen}
+        title={`Delete ${selectedIds.size === 1 ? "note" : "notes"}`}
+        description={`Are you sure you want to delete ${
+          selectedIds.size === 1 ? "this note" : `${selectedIds.size} notes`
+        }? They will be moved to the Recycle Bin.`}
+        onCancel={() => {
+          setIsBulkDeleteOpen(false);
+          if (selectedIds.size === 1) setSelectedIds(new Set());
+        }}
         onConfirm={() => {
-          if (noteToDelete) {
-            deleteNote(noteToDelete.id);
-          }
-          setNoteToDelete(null);
+          deleteNotes(Array.from(selectedIds));
+          setSelectedIds(new Set());
+          setIsBulkDeleteOpen(false);
         }}
       />
     </div>

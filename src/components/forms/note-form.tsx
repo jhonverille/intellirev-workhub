@@ -8,19 +8,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/ui/markdown";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
 import { cn, normalizeTags } from "@/lib/utils";
-import type { Note, NoteDraft } from "@/lib/types";
+import type { Member, Note, NoteDraft } from "@/lib/types";
 
 type NoteFormProps = {
   initialValue?: Note;
+  members?: Member[];
   onSubmit: (value: NoteDraft) => void;
   onCancel: () => void;
 };
 
-export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
+export function NoteForm({ initialValue, members = [], onSubmit, onCancel }: NoteFormProps) {
   const [title, setTitle] = useState(initialValue?.title ?? "");
   const [content, setContent] = useState(initialValue?.content ?? "");
   const [tags, setTags] = useState(initialValue?.tags.join(", ") ?? "");
   const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(initialValue?.assigneeIds ?? []);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [errors, setErrors] = useState<{ title?: string; content?: string }>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,6 +48,7 @@ export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
       content: content.trim(),
       tags: normalizeTags(tags),
       visibility,
+      assigneeIds,
     });
   };
 
@@ -75,7 +78,7 @@ export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
           )}
         </Field>
 
-        <Field label="Privacy" hint="Private notes are only visible to you.">
+        <Field label="Privacy" hint="Private notes are only visible to you and assignees.">
           {(fieldProps) => (
             <Select
               {...fieldProps}
@@ -83,11 +86,40 @@ export function NoteForm({ initialValue, onSubmit, onCancel }: NoteFormProps) {
               onChange={(event) => setVisibility(event.target.value as "public" | "private")}
             >
               <option value="public">Public (Workspace)</option>
-              <option value="private">Private (Only You)</option>
+              <option value="private">Private (You + Assignees)</option>
             </Select>
           )}
         </Field>
       </div>
+
+      {members.length > 0 && (
+        <Field label="Share with" hint="Assignees can view this note even if it's private.">
+          {() => (
+            <div className="grid gap-2 sm:grid-cols-2 mt-2">
+              {members.map((member) => (
+                <label
+                  key={member.uid}
+                  className="flex flex-1 items-center gap-3 text-sm cursor-pointer p-2.5 rounded-xl hover:bg-[var(--surface-strong)] transition border border-[var(--line)]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={assigneeIds.includes(member.uid)}
+                    onChange={(e) => {
+                      if (e.target.checked) setAssigneeIds([...assigneeIds, member.uid]);
+                      else setAssigneeIds(assigneeIds.filter((id) => id !== member.uid));
+                    }}
+                    className="h-4 w-4 rounded border-[var(--line)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex flex-col min-w-0 leading-tight">
+                    <span className="truncate font-medium">{member.displayName || "Unknown User"}</span>
+                    <span className="truncate text-[10px] text-[var(--muted)]">{member.email}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </Field>
+      )}
 
       <Field
         label="Content"

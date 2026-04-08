@@ -42,6 +42,35 @@ export default function InvitePageClient({ inviteId }: { inviteId: string }) {
         }
 
         const workspaceId = inviteData.workspaceId;
+        const inviterId = inviteData.createdBy;
+
+        // ── Anti-circular invite guard ─────────────────────────────────────
+        // Block if the inviter is already a member in the current user's own workspace.
+        // This prevents mutually nested team memberships.
+        const acceptorUserRef = doc(db, "users", user.uid);
+        const acceptorUserSnap = await getDoc(acceptorUserRef);
+        if (acceptorUserSnap.exists()) {
+          const acceptorData = acceptorUserSnap.data();
+          const acceptorWorkspaceIds: string[] = acceptorData.workspaceIds || [];
+
+          for (const wsId of acceptorWorkspaceIds) {
+            const wsSnap = await getDoc(doc(db, "workspaces", wsId));
+            if (wsSnap.exists() && wsSnap.data()?.ownerId === user.uid) {
+              // This is the acceptor's own workspace — check if inviter is already a member
+              const members = wsSnap.data()?.members || {};
+              if (inviterId in members) {
+                setError(
+                  "You cannot join this workspace because its owner is already a member of your workspace. Mutual team memberships are not allowed."
+                );
+                setLoading(false);
+                return;
+              }
+              break;
+            }
+          }
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         setJoining(true);
 
         // 1. Add user to the workspace members
@@ -52,7 +81,7 @@ export default function InvitePageClient({ inviteId }: { inviteId: string }) {
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            role: "assignee",
+            role: "member",
             joinedAt: new Date().toISOString(),
           }
         });

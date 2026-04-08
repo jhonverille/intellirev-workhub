@@ -35,10 +35,11 @@ import { auth, db, googleProvider } from "./firebase";
 import { usePathname } from "next/navigation";
 import {
   onAuthStateChanged,
-  signInWithPopup,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signOut as firebaseSignOut,
+  GoogleAuthProvider,
   type User,
 } from "firebase/auth";
 import { doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
@@ -53,22 +54,26 @@ type WorkspaceContextValue = {
   createTask: (draft: TaskDraft) => void;
   updateTask: (id: string, draft: TaskDraft) => void;
   deleteTask: (id: string) => void;
+  deleteTasks: (ids: string[]) => void;
   toggleTaskCompletion: (id: string) => void;
   createProject: (draft: ProjectDraft) => void;
   updateProject: (id: string, draft: ProjectDraft) => void;
   deleteProject: (id: string) => void;
+  deleteProjects: (ids: string[]) => void;
   createNote: (draft: NoteDraft) => void;
   updateNote: (id: string, draft: NoteDraft) => void;
   deleteNote: (id: string) => void;
+  deleteNotes: (ids: string[]) => void;
   createLink: (draft: QuickLinkDraft) => void;
   updateLink: (id: string, draft: QuickLinkDraft) => void;
   deleteLink: (id: string) => void;
-  restoreItem: (type: keyof WorkspaceData[\"trash\"], id: string) => void;
-  permanentDeleteItem: (type: keyof WorkspaceData[\"trash\"], id: string) => void;
+  deleteLinks: (ids: string[]) => void;
+  restoreItem: (type: keyof WorkspaceData["trash"], id: string) => void;
+  permanentDeleteItem: (type: keyof WorkspaceData["trash"], id: string) => void;
   emptyTrash: () => void;
   undoLastDeletion: () => void;
-  lastDeletedItem: { type: keyof WorkspaceData[\"trash\"]; id: string } | null;
-  setLastDeletedItem: (item: { type: keyof WorkspaceData[\"trash\"]; id: string } | null) => void;
+  lastDeletedItem: { type: keyof WorkspaceData["trash"]; id: string } | null;
+  setLastDeletedItem: (item: { type: keyof WorkspaceData["trash"]; id: string } | null) => void;
   updateSettings: (settings: WorkspaceSettings) => void;
   setTheme: (theme: ThemePreference) => void;
   replaceData: (data: WorkspaceData) => void;
@@ -90,24 +95,28 @@ type State = {
 };
 
 type Action =
-  | { type: \"replace\"; payload: WorkspaceData }
-  | { type: \"set-search\"; payload: string }
-  | { type: \"upsert-task\"; payload: Task }
-  | { type: \"delete-task\"; payload: string }
-  | { type: \"toggle-task\"; payload: string }
-  | { type: \"upsert-project\"; payload: Project }
-  | { type: \"delete-project\"; payload: string }
-  | { type: \"upsert-note\"; payload: Note }
-  | { type: \"delete-note\"; payload: string }
-  | { type: \"upsert-link\"; payload: QuickLink }
-  | { type: \"delete-link\"; payload: string }
-  | { type: \"restore-item\"; payload: { type: keyof WorkspaceData[\"trash\"]; id: string } }
+  | { type: "replace"; payload: WorkspaceData }
+  | { type: "set-search"; payload: string }
+  | { type: "upsert-task"; payload: Task }
+  | { type: "delete-task"; payload: string }
+  | { type: "delete-tasks"; payload: string[] }
+  | { type: "toggle-task"; payload: string }
+  | { type: "upsert-project"; payload: Project }
+  | { type: "delete-project"; payload: string }
+  | { type: "delete-projects"; payload: string[] }
+  | { type: "upsert-note"; payload: Note }
+  | { type: "delete-note"; payload: string }
+  | { type: "delete-notes"; payload: string[] }
+  | { type: "upsert-link"; payload: QuickLink }
+  | { type: "delete-link"; payload: string }
+  | { type: "delete-links"; payload: string[] }
+  | { type: "restore-item"; payload: { type: keyof WorkspaceData["trash"]; id: string } }
   | {
-      type: \"permanent-delete\";
-      payload: { type: keyof WorkspaceData[\"trash\"]; id: string };
+      type: "permanent-delete";
+      payload: { type: keyof WorkspaceData["trash"]; id: string };
     }
-  | { type: \"empty-trash\" }
-  | { type: \"update-settings\"; payload: WorkspaceSettings };
+  | { type: "empty-trash" }
+  | { type: "update-settings"; payload: WorkspaceSettings };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
@@ -123,11 +132,11 @@ function upsertById<T extends { id: string }>(items: T[], nextItem: T) {
 
 function workspaceReducer(state: State, action: Action): State {
   switch (action.type) {
-    case \"replace\":
+    case "replace":
       return { ...state, data: action.payload };
-    case \"set-search\":
+    case "set-search":
       return { ...state, searchQuery: action.payload };
-    case \"upsert-task\":
+    case "upsert-task":
       return {
         ...state,
         data: {
@@ -135,7 +144,7 @@ function workspaceReducer(state: State, action: Action): State {
           tasks: upsertById(state.data.tasks, action.payload),
         },
       };
-    case \"toggle-task\":
+    case "toggle-task":
       return {
         ...state,
         data: {
@@ -145,14 +154,14 @@ function workspaceReducer(state: State, action: Action): State {
               ? {
                   ...task,
                   completed: !task.completed,
-                  status: !task.completed ? \"done\" : \"to do\",
+                  status: !task.completed ? "done" : "to do",
                   updatedAt: new Date().toISOString(),
                 }
               : task,
           ),
         },
       };
-    case \"upsert-project\":
+    case "upsert-project":
       return {
         ...state,
         data: {
@@ -160,7 +169,7 @@ function workspaceReducer(state: State, action: Action): State {
           projects: upsertById(state.data.projects, action.payload),
         },
       };
-    case \"upsert-note\":
+    case "upsert-note":
       return {
         ...state,
         data: {
@@ -168,7 +177,7 @@ function workspaceReducer(state: State, action: Action): State {
           notes: upsertById(state.data.notes, action.payload),
         },
       };
-    case \"upsert-link\":
+    case "upsert-link":
       return {
         ...state,
         data: {
@@ -176,7 +185,7 @@ function workspaceReducer(state: State, action: Action): State {
           links: upsertById(state.data.links, action.payload),
         },
       };
-    case \"delete-task\": {
+    case "delete-task": {
       const task = state.data.tasks.find((t) => t.id === action.payload);
       if (!task) return state;
       return {
@@ -191,7 +200,7 @@ function workspaceReducer(state: State, action: Action): State {
         },
       };
     }
-    case \"delete-project\": {
+    case "delete-project": {
       const project = state.data.projects.find((p) => p.id === action.payload);
       if (!project) return state;
       return {
@@ -204,11 +213,11 @@ function workspaceReducer(state: State, action: Action): State {
             projects: [project, ...state.data.trash.projects],
           },
           // Keep tasks project affinity for now so they are restored correctly
-          // but they won't show up in any project lists because the project is \"gone\"
+          // but they won't show up in any project lists because the project is "gone"
         },
       };
     }
-    case \"delete-note\": {
+    case "delete-note": {
       const note = state.data.notes.find((n) => n.id === action.payload);
       if (!note) return state;
       return {
@@ -223,7 +232,7 @@ function workspaceReducer(state: State, action: Action): State {
         },
       };
     }
-    case \"delete-link\": {
+    case "delete-link": {
       const link = state.data.links.find((l) => l.id === action.payload);
       if (!link) return state;
       return {
@@ -238,7 +247,71 @@ function workspaceReducer(state: State, action: Action): State {
         },
       };
     }
-    case \"restore-item\": {
+    case "delete-tasks": {
+      const ids = action.payload;
+      const tasksToDelete = state.data.tasks.filter((t) => ids.includes(t.id));
+      if (tasksToDelete.length === 0) return state;
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          tasks: state.data.tasks.filter((t) => !ids.includes(t.id)),
+          trash: {
+            ...state.data.trash,
+            tasks: [...tasksToDelete, ...state.data.trash.tasks],
+          },
+        },
+      };
+    }
+    case "delete-projects": {
+      const ids = action.payload;
+      const projectsToDelete = state.data.projects.filter((p) => ids.includes(p.id));
+      if (projectsToDelete.length === 0) return state;
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          projects: state.data.projects.filter((p) => !ids.includes(p.id)),
+          trash: {
+            ...state.data.trash,
+            projects: [...projectsToDelete, ...state.data.trash.projects],
+          },
+        },
+      };
+    }
+    case "delete-notes": {
+      const ids = action.payload;
+      const notesToDelete = state.data.notes.filter((n) => ids.includes(n.id));
+      if (notesToDelete.length === 0) return state;
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          notes: state.data.notes.filter((n) => !ids.includes(n.id)),
+          trash: {
+            ...state.data.trash,
+            notes: [...notesToDelete, ...state.data.trash.notes],
+          },
+        },
+      };
+    }
+    case "delete-links": {
+      const ids = action.payload;
+      const linksToDelete = state.data.links.filter((l) => ids.includes(l.id));
+      if (linksToDelete.length === 0) return state;
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          links: state.data.links.filter((l) => !ids.includes(l.id)),
+          trash: {
+            ...state.data.trash,
+            links: [...linksToDelete, ...state.data.trash.links],
+          },
+        },
+      };
+    }
+    case "restore-item": {
       const { type, id } = action.payload;
       const item = (state.data.trash[type] as any[]).find((i) => i.id === id);
       if (!item) return state;
@@ -255,7 +328,7 @@ function workspaceReducer(state: State, action: Action): State {
         },
       };
     }
-    case \"permanent-delete\": {
+    case "permanent-delete": {
       const { type, id } = action.payload;
       return {
         ...state,
@@ -268,7 +341,7 @@ function workspaceReducer(state: State, action: Action): State {
         },
       };
     }
-    case \"empty-trash\":
+    case "empty-trash":
       return {
         ...state,
         data: {
@@ -281,7 +354,7 @@ function workspaceReducer(state: State, action: Action): State {
           },
         },
       };
-    case \"update-settings\":
+    case "update-settings":
       return {
         ...state,
         data: {
@@ -295,10 +368,10 @@ function workspaceReducer(state: State, action: Action): State {
 }
 
 function resolveTheme(theme: ThemePreference) {
-  if (theme === \"system\") {
-    return window.matchMedia(\"(prefers-color-scheme: dark)\").matches
-      ? \"dark\"
-      : \"light\";
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   }
 
   return theme;
@@ -306,16 +379,16 @@ function resolveTheme(theme: ThemePreference) {
 
 /**
  * Produces a stable JSON hash by sorting object keys recursively.
- * This prevents false \"data changed\" positives caused by field-order
+ * This prevents false "data changed" positives caused by field-order
  * differences between what the client writes and what Firestore returns.
  */
 function stableHash(value: unknown): string {
-  if (value === null || typeof value !== \"object\") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableHash).join(\",\")}]`;
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableHash).join(",")}]`;
   const sorted = Object.keys(value as object)
     .sort()
     .map((k) => `${JSON.stringify(k)}:${stableHash((value as any)[k])}`);
-  return `{${sorted.join(\",\")}}`;
+  return `{${sorted.join(",")}}`;
 }
 
 /**
@@ -331,15 +404,15 @@ function logActivity({
 }: {
   user: { uid: string; displayName: string | null; photoURL: string | null };
   workspaceId: string;
-  action: ActivityEvent[\"action\"];
-  entityType: ActivityEvent[\"entityType\"];
+  action: ActivityEvent["action"];
+  entityType: ActivityEvent["entityType"];
   entityName: string;
 }) {
-  const activityRef = collection(db, \"workspaces\", workspaceId, \"activity\");
-  const event: Omit<ActivityEvent, \"id\"> = {
+  const activityRef = collection(db, "workspaces", workspaceId, "activity");
+  const event: Omit<ActivityEvent, "id"> = {
     workspaceId,
     userId: user.uid,
-    userDisplayName: user.displayName ?? \"Unknown\",
+    userDisplayName: user.displayName ?? "Unknown",
     userPhotoURL: user.photoURL,
     action,
     entityType,
@@ -347,20 +420,20 @@ function logActivity({
     timestamp: new Date().toISOString(),
   };
   addDoc(activityRef, event).catch((err) =>
-    console.warn(\"[WorkHub] Activity log write failed:\", err),
+    console.warn("[WorkHub] Activity log write failed:", err),
   );
 }
 
 export function WorkHubProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(workspaceReducer, {
     data: defaultWorkspaceData,
-    searchQuery: \"\",
+    searchQuery: "",
   });
   const [initialized, setInitialized] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
-  const [resolvedTheme, setResolvedTheme] = useState<\"light\" | \"dark\">(\"light\");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [lastDeletedItem, setLastDeletedItem] = useState<{
-    type: keyof WorkspaceData[\"trash\"];
+    type: keyof WorkspaceData["trash"];
     id: string;
   } | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -383,11 +456,11 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = normalizeWorkspaceData(JSON.parse(stored));
-        dispatch({ type: \"replace\", payload: parsed });
+        dispatch({ type: "replace", payload: parsed });
       }
     } catch (err) {
-      console.error(\"[WorkHub] Local storage load error:\", err);
-      setStorageError(\"Failed to load local data.\");
+      console.error("[WorkHub] Local storage load error:", err);
+      setStorageError("Failed to load local data.");
     }
   }, []);
 
@@ -398,21 +471,26 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
     // Capture the result of a redirect sign-in if the user was just redirected back
     getRedirectResult(auth).catch((err) => {
-      console.error(\"[WorkHub] Redirect sign-in error:\", err);
+      console.error("[WorkHub] Redirect sign-in error:", err);
+      setAuthError(err.message || "Redirect sign-in failed.");
     });
 
-    console.log(\"[WorkHub] Initializing Auth listener\");
+    console.log("[WorkHub] Initializing Auth listener");
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log(\"[WorkHub] Auth State:\", firebaseUser ? `User(${firebaseUser.uid})` : \"Null\");
+      console.log("[WorkHub] Auth State:", firebaseUser ? `User(${firebaseUser.uid})` : "Null");
       // Account Switch Protection: If the user changed, wipe the slate clean before syncing
       if (firebaseUser && user && firebaseUser.uid !== user.uid) {
-        console.warn(\"[WorkHub] Account switch detected. Sanitizing data.\");
-        dispatch({ type: \"replace\", payload: normalizeWorkspaceData({}) });
+        console.warn("[WorkHub] Account switch detected. Sanitizing data.");
+        dispatch({ type: "replace", payload: normalizeWorkspaceData({}) });
         setRemoteDataHash(null);
         window.localStorage.removeItem(STORAGE_KEY);
       }
 
       setUser(firebaseUser);
+      if (firebaseUser) {
+        setAuthError(null);
+      }
+
 
       // Cleanup any previous snapshot listener
       if (userUnsubscribe) {
@@ -422,11 +500,11 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
       if (!firebaseUser) {
         if (isMounted) {
-          console.log(\"[WorkHub] User logged out. Wiping state.\");
+          console.log("[WorkHub] User logged out. Wiping state.");
           setCurrentWorkspaceId(null);
           // Only mark as initialized AFTER resetting state to prevent stale sync
           window.localStorage.removeItem(STORAGE_KEY);
-          dispatch({ type: \"replace\", payload: normalizeWorkspaceData({}) });
+          dispatch({ type: "replace", payload: normalizeWorkspaceData({}) });
           setRemoteDataHash(null);
           setInitialized(true);
         }
@@ -434,13 +512,13 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       }
 
       setWorkspaceLoadError(null);
-      const userDocRef = doc(db, \"users\", firebaseUser.uid);
+      const userDocRef = doc(db, "users", firebaseUser.uid);
 
       try {
         // Ensure user document exists (Migration/New User)
         const docSnap = await getDoc(userDocRef);
         if (!docSnap.exists() && isMounted) {
-          console.log(\"[WorkHub] Creating missing user document\");
+          console.log("[WorkHub] Creating missing user document");
           await setDoc(userDocRef, {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
@@ -450,9 +528,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           });
         }
       } catch (err: any) {
-        console.error(\"[WorkHub] User doc check/create error:\", err);
+        console.error("[WorkHub] User doc check/create error:", err);
         if (isMounted) {
-          setWorkspaceLoadError(err.message || \"Failed to connect to user profile.\");
+          setWorkspaceLoadError(err.message || "Failed to connect to user profile.");
           setInitialized(true);
           return;
         }
@@ -467,17 +545,17 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           const targetId = userData.currentWorkspaceId || userData.workspaceIds?.[0];
           
           if (targetId) {
-            console.log(\"[WorkHub] Target Workspace:\", targetId);
+            console.log("[WorkHub] Target Workspace:", targetId);
             setCurrentWorkspaceId(targetId);
           } else {
             // Self-healing: create a default workspace if none exists
-            console.log(\"[WorkHub] Creating first workspace\");
+            console.log("[WorkHub] Creating first workspace");
             const newWsId = makeId();
             const timestamp = new Date().toISOString();
-            await setDoc(doc(db, \"workspaces\", newWsId), {
+            await setDoc(doc(db, "workspaces", newWsId), {
               ...state.data,
               id: newWsId,
-              name: \"My Workspace\",
+              name: "My Workspace",
               ownerId: firebaseUser.uid,
               members: {
                 [firebaseUser.uid]: {
@@ -485,7 +563,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
                   email: firebaseUser.email,
                   displayName: firebaseUser.displayName,
                   photoURL: firebaseUser.photoURL,
-                  role: \"owner\",
+                  role: "owner",
                   joinedAt: timestamp,
                 }
               },
@@ -501,9 +579,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
         setInitialized(true);
       }, (err) => {
-        console.error(\"[WorkHub] User snapshot error:\", err);
+        console.error("[WorkHub] User snapshot error:", err);
         if (isMounted) {
-          setWorkspaceLoadError(\"Lost connection to user profile. Please check your internet.\");
+          setWorkspaceLoadError("Lost connection to user profile. Please check your internet.");
           setInitialized(true);
         }
       });
@@ -528,9 +606,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const wsDocRef = doc(db, \"workspaces\", currentWorkspaceId);
-    const privateWsRef = doc(db, \"private_workspaces\", `${currentWorkspaceId}_${user.uid}`);
-    console.log(\"[WorkHub] Syncing workspace:\", currentWorkspaceId);
+    const wsDocRef = doc(db, "workspaces", currentWorkspaceId);
+    const privateWsRef = doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`);
+    console.log("[WorkHub] Syncing workspace:", currentWorkspaceId);
     setIsSyncing(true);
 
     let lastPublicData: WorkspaceData | null = null;
@@ -560,7 +638,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         });
 
         // 3. GHOSTING PREVENTION: If it's in our local trash, remove it from the active list.
-        // This prevents deleted items from \"reappearing\" during sync.
+        // This prevents deleted items from "reappearing" during sync.
         localTrash.forEach(trashItem => {
           map.delete(trashItem.id);
         });
@@ -581,8 +659,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       
       setRemoteDataHash(remoteHash);
       if (remoteHash !== localHash) {
-        console.log(\"[WorkHub] Remote update detected. Merging.\");
-        dispatch({ type: \"replace\", payload: mergedData });
+        console.log("[WorkHub] Remote update detected. Merging.");
+        dispatch({ type: "replace", payload: mergedData });
       }
     };
 
@@ -590,13 +668,13 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       if (snapshot.exists()) {
         lastPublicData = normalizeWorkspaceData(snapshot.data());
       } else {
-        setWorkspaceLoadError(\"Workspace not found or access denied.\");
+        setWorkspaceLoadError("Workspace not found or access denied.");
       }
       mergeAndDispatch();
       setIsSyncing(false);
     }, (err) => {
-      console.error(\"[WorkHub] Workspace sync error:\", err);
-      setWorkspaceLoadError(\"Failed to connect to workspace.\");
+      console.error("[WorkHub] Workspace sync error:", err);
+      setWorkspaceLoadError("Failed to connect to workspace.");
       setIsSyncing(false);
     });
 
@@ -608,7 +686,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       }
       mergeAndDispatch();
     }, (err) => {
-      console.error(\"[WorkHub] Private workspace sync error:\", err);
+      console.error("[WorkHub] Private workspace sync error:", err);
     });
 
     return () => {
@@ -635,29 +713,29 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         
         const publicData: WorkspaceData = {
           ...baseData,
-          tasks: baseData.tasks.filter(t => t.visibility !== \"private\"),
-          projects: baseData.projects.filter(p => p.visibility !== \"private\"),
-          notes: baseData.notes.filter(n => n.visibility !== \"private\"),
-          links: baseData.links.filter(l => l.visibility !== \"private\"),
+          tasks: baseData.tasks.filter(t => t.visibility !== "private"),
+          projects: baseData.projects.filter(p => p.visibility !== "private"),
+          notes: baseData.notes.filter(n => n.visibility !== "private"),
+          links: baseData.links.filter(l => l.visibility !== "private"),
         };
 
         const privateData: WorkspaceData = {
           ...baseData,
           members: {}, // Skip member array in private
-          tasks: baseData.tasks.filter(t => t.visibility === \"private\"),
-          projects: baseData.projects.filter(p => p.visibility === \"private\"),
-          notes: baseData.notes.filter(n => n.visibility === \"private\"),
-          links: baseData.links.filter(l => l.visibility === \"private\"),
+          tasks: baseData.tasks.filter(t => t.visibility === "private"),
+          projects: baseData.projects.filter(p => p.visibility === "private"),
+          notes: baseData.notes.filter(n => n.visibility === "private"),
+          links: baseData.links.filter(l => l.visibility === "private"),
         };
 
-        const publicProm = setDoc(doc(db, \"workspaces\", currentWorkspaceId), publicData, { merge: true });
-        const privateProm = setDoc(doc(db, \"private_workspaces\", `${currentWorkspaceId}_${user.uid}`), privateData, { merge: true });
+        const publicProm = setDoc(doc(db, "workspaces", currentWorkspaceId), publicData, { merge: true });
+        const privateProm = setDoc(doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`), privateData, { merge: true });
         
         Promise.all([publicProm, privateProm]).finally(() => setIsSyncing(false));
       }
     } catch {
       setStorageError(
-        \"Work Hub could not save your latest changes. Your current session still works, but changes may not persist.\",
+        "Work Hub could not save your latest changes. Your current session still works, but changes may not persist.",
       );
     }
   }, [initialized, state.data, user, remoteDataHash, currentWorkspaceId]);
@@ -670,16 +748,16 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const applyTheme = () => {
       const theme = resolveTheme(state.data.settings.theme);
-      root.classList.toggle(\"dark\", theme === \"dark\");
+      root.classList.toggle("dark", theme === "dark");
       root.dataset.theme = theme;
       setResolvedTheme(theme);
     };
 
     applyTheme();
-    const media = window.matchMedia(\"(prefers-color-scheme: dark)\");
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme();
-    media.addEventListener(\"change\", onChange);
-    return () => media.removeEventListener(\"change\", onChange);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
   }, [initialized, state.data.settings.theme]);
 
   const contextValue: WorkspaceContextValue = useMemo(
@@ -689,7 +767,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       storageError,
       resolvedTheme,
       searchQuery: state.searchQuery,
-      setSearchQuery: (payload: string) => dispatch({ type: \"set-search\", payload }),
+      setSearchQuery: (payload: string) => dispatch({ type: "set-search", payload }),
       createTask: (draft: TaskDraft) => {
         const timestamp = new Date().toISOString();
         let visibility = draft.visibility;
@@ -697,20 +775,20 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         
         if (draft.projectId) {
           const matchedProject = state.data.projects.find(p => p.id === draft.projectId);
-          if (matchedProject && matchedProject.visibility === \"private\") {
-            visibility = \"private\";
+          if (matchedProject && matchedProject.visibility === "private") {
+            visibility = "private";
             ownerId = matchedProject.ownerId;
           }
         }
 
         dispatch({
-          type: \"upsert-task\",
+          type: "upsert-task",
           payload: {
             ...draft,
             visibility,
             ownerId: ownerId || user?.uid,
             id: makeId(),
-            completed: draft.completed ?? draft.status === \"done\",
+            completed: draft.completed ?? draft.status === "done",
             createdAt: timestamp,
             updatedAt: timestamp,
           },
@@ -723,27 +801,31 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
 
         dispatch({
-          type: \"upsert-task\",
+          type: "upsert-task",
           payload: {
             ...current,
             ...draft,
             id,
-            ownerId: draft.visibility === \"private\" && user ? user.uid : current.ownerId,
-            completed: draft.completed ?? draft.status === \"done\",
+            ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
+            completed: draft.completed ?? draft.status === "done",
             updatedAt: new Date().toISOString(),
           },
         });
       },
       deleteTask: (id: string) => {
-        dispatch({ type: \"delete-task\", payload: id });
-        setLastDeletedItem({ type: \"tasks\", id });
+        dispatch({ type: "delete-task", payload: id });
+        setLastDeletedItem({ type: "tasks", id });
       },
-      toggleTaskCompletion: (id: string) => dispatch({ type: \"toggle-task\", payload: id }),
+      deleteTasks: (ids: string[]) => {
+        dispatch({ type: "delete-tasks", payload: ids });
+        // Don't set lastDeletedItem for bulk to avoid confusion
+      },
+      toggleTaskCompletion: (id: string) => dispatch({ type: "toggle-task", payload: id }),
       createProject: (draft: ProjectDraft) => {
         const timestamp = new Date().toISOString();
         const newId = makeId();
         dispatch({
-          type: \"upsert-project\",
+          type: "upsert-project",
           payload: {
             ...draft,
             id: newId,
@@ -752,8 +834,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: timestamp,
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"created\", entityType: \"project\", entityName: draft.name });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "created", entityType: "project", entityName: draft.name });
         }
       },
       updateProject: (id: string, draft: ProjectDraft) => {
@@ -763,31 +845,34 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
 
         dispatch({
-          type: \"upsert-project\",
+          type: "upsert-project",
           payload: {
             ...current,
             ...draft,
             id,
-            ownerId: draft.visibility === \"private\" && user ? user.uid : current.ownerId,
+            ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
             updatedAt: new Date().toISOString(),
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"updated\", entityType: \"project\", entityName: draft.name });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "updated", entityType: "project", entityName: draft.name });
         }
       },
       deleteProject: (id: string) => {
         const project = state.data.projects.find((p) => p.id === id);
-        dispatch({ type: \"delete-project\", payload: id });
-        setLastDeletedItem({ type: \"projects\", id });
-        if (user && currentWorkspaceId && project && project.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"deleted\", entityType: \"project\", entityName: project.name });
+        dispatch({ type: "delete-project", payload: id });
+        setLastDeletedItem({ type: "projects", id });
+        if (user && currentWorkspaceId && project && project.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "deleted", entityType: "project", entityName: project.name });
         }
+      },
+      deleteProjects: (ids: string[]) => {
+        dispatch({ type: "delete-projects", payload: ids });
       },
       createNote: (draft: NoteDraft) => {
         const timestamp = new Date().toISOString();
         dispatch({
-          type: \"upsert-note\",
+          type: "upsert-note",
           payload: {
             ...draft,
             id: makeId(),
@@ -796,8 +881,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: timestamp,
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"created\", entityType: \"note\", entityName: draft.title });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "created", entityType: "note", entityName: draft.title });
         }
       },
       updateNote: (id: string, draft: NoteDraft) => {
@@ -807,31 +892,34 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
 
         dispatch({
-          type: \"upsert-note\",
+          type: "upsert-note",
           payload: {
             ...current,
             ...draft,
             id,
-            ownerId: draft.visibility === \"private\" && user ? user.uid : current.ownerId,
+            ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
             updatedAt: new Date().toISOString(),
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"updated\", entityType: \"note\", entityName: draft.title });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "updated", entityType: "note", entityName: draft.title });
         }
       },
       deleteNote: (id: string) => {
         const note = state.data.notes.find((n) => n.id === id);
-        dispatch({ type: \"delete-note\", payload: id });
-        setLastDeletedItem({ type: \"notes\", id });
-        if (user && currentWorkspaceId && note && note.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"deleted\", entityType: \"note\", entityName: note.title });
+        dispatch({ type: "delete-note", payload: id });
+        setLastDeletedItem({ type: "notes", id });
+        if (user && currentWorkspaceId && note && note.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "deleted", entityType: "note", entityName: note.title });
         }
+      },
+      deleteNotes: (ids: string[]) => {
+        dispatch({ type: "delete-notes", payload: ids });
       },
       createLink: (draft: QuickLinkDraft) => {
         const timestamp = new Date().toISOString();
         dispatch({
-          type: \"upsert-link\",
+          type: "upsert-link",
           payload: {
             ...draft,
             id: makeId(),
@@ -840,8 +928,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             updatedAt: timestamp,
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"created\", entityType: \"link\", entityName: draft.title });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "created", entityType: "link", entityName: draft.title });
         }
       },
       updateLink: (id: string, draft: QuickLinkDraft) => {
@@ -851,72 +939,82 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         }
 
         dispatch({
-          type: \"upsert-link\",
+          type: "upsert-link",
           payload: {
             ...current,
             ...draft,
             id,
-            ownerId: draft.visibility === \"private\" && user ? user.uid : current.ownerId,
+            ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
             updatedAt: new Date().toISOString(),
           },
         });
-        if (user && currentWorkspaceId && draft.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"updated\", entityType: \"link\", entityName: draft.title });
+        if (user && currentWorkspaceId && draft.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "updated", entityType: "link", entityName: draft.title });
         }
       },
       deleteLink: (id: string) => {
         const link = state.data.links.find((l) => l.id === id);
-        dispatch({ type: \"delete-link\", payload: id });
-        setLastDeletedItem({ type: \"links\", id });
-        if (user && currentWorkspaceId && link && link.visibility !== \"private\") {
-          logActivity({ user, workspaceId: currentWorkspaceId, action: \"deleted\", entityType: \"link\", entityName: link.title });
+        dispatch({ type: "delete-link", payload: id });
+        setLastDeletedItem({ type: "links", id });
+        if (user && currentWorkspaceId && link && link.visibility !== "private") {
+          logActivity({ user, workspaceId: currentWorkspaceId, action: "deleted", entityType: "link", entityName: link.title });
         }
       },
-      restoreItem: (type: keyof WorkspaceData[\"trash\"], id: string) => {
-        dispatch({ type: \"restore-item\", payload: { type, id } });
+      deleteLinks: (ids: string[]) => {
+        dispatch({ type: "delete-links", payload: ids });
       },
-      permanentDeleteItem: (type: keyof WorkspaceData[\"trash\"], id: string) => {
-        dispatch({ type: \"permanent-delete\", payload: { type, id } });
+      restoreItem: (type: keyof WorkspaceData["trash"], id: string) => {
+        dispatch({ type: "restore-item", payload: { type, id } });
       },
-      emptyTrash: () => dispatch({ type: \"empty-trash\" }),
+      permanentDeleteItem: (type: keyof WorkspaceData["trash"], id: string) => {
+        dispatch({ type: "permanent-delete", payload: { type, id } });
+      },
+      emptyTrash: () => dispatch({ type: "empty-trash" }),
       undoLastDeletion: () => {
         if (lastDeletedItem) {
-          dispatch({ type: \"restore-item\", payload: lastDeletedItem });
+          dispatch({ type: "restore-item", payload: lastDeletedItem });
           setLastDeletedItem(null);
         }
       },
-      updateSettings: (payload: WorkspaceSettings) => dispatch({ type: \"update-settings\", payload }),
+      updateSettings: (payload: WorkspaceSettings) => dispatch({ type: "update-settings", payload }),
       setTheme: (theme: ThemePreference) => {
         dispatch({
-          type: \"update-settings\",
+          type: "update-settings",
           payload: { ...state.data.settings, theme },
         });
       },
-      replaceData: (payload: WorkspaceData) => dispatch({ type: \"replace\", payload }),
+      replaceData: (payload: WorkspaceData) => dispatch({ type: "replace", payload }),
       signIn: async () => {
         setAuthError(null);
         setIsAuthenticating(true);
         try {
-          // Google provider is pre-configured with prompt: \"select_account\"
+          // Re-enable popup. Redirect often fails due to strict third-party cookie blocking in modern browsers.
           await signInWithPopup(auth, googleProvider);
-        } catch (error: any) {
-          console.error(\"Initial sign in error (Popup):\", error);
-          
-          // Fallback: If popup is blocked by the browser, use redirect
-          if (error.code === \"auth/popup-blocked\" || error.code === \"auth/cancelled-by-user\") {
-            setAuthError(\"auth/popup-blocked\");
-            try {
-              console.log(\"[WorkHub] Popup blocked. Falling back to Redirect.\");
-              await signInWithRedirect(auth, googleProvider);
-            } catch (redirectError: any) {
-              console.error(\"Redirect fallback error:\", redirectError);
-              setAuthError(redirectError.message || \"Redirect failed.\");
-            }
-          } else {
-            setAuthError(error.message || \"Sign in failed.\");
-          }
-        } finally {
           setIsAuthenticating(false);
+        } catch (error: any) {
+          // Do NOT console.error here because Next.js 15 dev server intercepts it
+          // and shows a huge error overlay, which interrupts the fallback redirect UX.
+          
+          if (error.code === "auth/popup-blocked") {
+            // Do NOT set an error string here. We want a silent fallback so the user 
+            // just sees the loading spinner continue as they are seamlessly redirected.
+            try {
+              // Creating a fresh provider to avoid state leak
+              const freshProvider = new GoogleAuthProvider();
+              freshProvider.setCustomParameters({ prompt: "select_account" });
+              await signInWithRedirect(auth, freshProvider);
+            } catch (redirectError: any) {
+              setAuthError(redirectError.message || "Redirect failed.");
+              setIsAuthenticating(false);
+            }
+          } else if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-by-user") {
+            setAuthError("Sign-in cancelled or interrupted.");
+            setIsAuthenticating(false);
+          } else {
+            console.error("Unhandled sign in error:", error);
+            setAuthError(error.message || "Sign in failed.");
+            setIsAuthenticating(false);
+          }
         }
       },
       signOut: async () => {
@@ -924,22 +1022,28 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           await firebaseSignOut(auth);
           // Sanitization: Clear local storage and reset all in-memory state
           window.localStorage.removeItem(STORAGE_KEY);
-          dispatch({ type: \"replace\", payload: normalizeWorkspaceData({}) });
+          dispatch({ type: "replace", payload: normalizeWorkspaceData({}) });
           setRemoteDataHash(null);
           setCurrentWorkspaceId(null);
+          // Hard reload the browser to clear completely the Firebase auth internal iframe cache.
+          // This prevents the "popup blocked on second attempt" bug caused by state retention.
+          window.location.reload();
         } catch (error: any) {
-          console.error(\"Sign out failed\", error);
+          console.error("Sign out failed", error);
         }
       },
+      user,
       isSyncing,
       isAuthenticating,
       authError,
       clearAuthError: () => setAuthError(null),
       currentWorkspaceId,
       workspaceLoadError,
-      userRole: (state.data.members?.[user?.uid || \"\"]?.role as Role) || \"guest\",
+      userRole: (state.data.members?.[user?.uid || ""]?.role as Role) || "guest",
+      lastDeletedItem,
+      setLastDeletedItem,
     }),
-    [state.data, state.searchQuery, initialized, storageError, resolvedTheme, user, isSyncing, authError, isAuthenticating, currentWorkspaceId, workspaceLoadError]
+    [state.data, state.searchQuery, initialized, storageError, resolvedTheme, user, isSyncing, authError, isAuthenticating, currentWorkspaceId, workspaceLoadError, lastDeletedItem]
   );
 
   return (
@@ -952,7 +1056,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 export function useWorkHub() {
   const context = useContext(WorkspaceContext);
   if (!context) {
-    throw new Error(\"useWorkHub must be used within a WorkHubProvider\");
+    throw new Error("useWorkHub must be used within a WorkHubProvider");
   }
   return context;
 }

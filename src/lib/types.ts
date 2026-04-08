@@ -37,6 +37,7 @@ export type Note = {
   title: string;
   content: string;
   tags: string[];
+  assigneeIds: string[];       // shared/collaborative note access
   visibility?: "public" | "private";
   ownerId?: string;
   createdAt: string;
@@ -65,7 +66,7 @@ export type WorkspaceSettings = {
   };
 };
 
-export type Role = "owner" | "assignee";
+export type Role = "owner" | "member";
 
 export type Member = {
   uid: string;
@@ -79,6 +80,7 @@ export type Member = {
 export type Workspace = {
   id: string;
   name: string;
+  description?: string;         // short team bio shown in Directory
   ownerId: string;
   members: Record<string, Member>;
   createdAt: string;

@@ -40,12 +40,7 @@ export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { data, userRole } = useWorkHub();
 
-  const filteredNavigation = appNavigation.filter((item) => {
-    if (item.href === "/team") {
-      return userRole === "owner";
-    }
-    return true;
-  });
+  const filteredNavigation = appNavigation;
 
   return (
     <aside

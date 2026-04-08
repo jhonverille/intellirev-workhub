@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActions } from "@/components/workspace/bulk-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/forms/field";
 import { TaskForm } from "@/components/forms/task-form";
@@ -20,10 +22,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
+import { AttributionRow } from "@/components/workspace/attribution-row";
 import { getTaskPriorityTone, getTaskStatusTone } from "@/lib/presentation";
 import type { Task } from "@/lib/types";
 import { useWorkHub } from "@/lib/work-hub-store";
-import { formatDate, isOverdue, safeLower } from "@/lib/utils";
+import { formatDate, isOverdue, safeLower, sortByUpdatedAt } from "@/lib/utils";
 
 export default function TasksPage() {
   const {
@@ -33,7 +36,7 @@ export default function TasksPage() {
     searchQuery,
     createTask,
     updateTask,
-    deleteTask,
+    deleteTasks,
     toggleTaskCompletion,
   } = useWorkHub();
   const isOwner = userRole === "owner";
@@ -42,12 +45,13 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const viewableTasks = isOwner ? data.tasks : data.tasks.filter(t => t.assigneeIds?.includes(user?.uid ?? ""));
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
-  const tasks = viewableTasks.filter((task) => {
+  const tasks = sortByUpdatedAt(viewableTasks).filter((task) => {
     const matchesQuery = query
       ? [task.title, task.description]
           .join(" ")
@@ -61,6 +65,24 @@ export default function TasksPage() {
 
     return matchesQuery && matchesStatus && matchesPriority && showCompleted;
   });
+
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === tasks.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tasks.map((t) => t.id)));
+    }
+  };
 
   const spacing = data.settings.preferences.compactMode ? "gap-3" : "gap-4";
 
@@ -124,6 +146,16 @@ export default function TasksPage() {
         }
       />
 
+      {tasks.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <Checkbox
+            checked={selectedIds.size === tasks.length && tasks.length > 0}
+            onChange={toggleAll}
+          />
+          <span className="text-sm font-medium text-[var(--muted)]">Select all visible</span>
+        </div>
+      )}
+
       {viewableTasks.length === 0 ? (
         <EmptyState
           icon={<CheckSquareIcon className="h-5 w-5" />}
@@ -150,18 +182,24 @@ export default function TasksPage() {
               <Surface key={task.id} className="p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex flex-1 gap-4">
-                    <button
-                      onClick={() => toggleTaskCompletion(task.id)}
-                      aria-pressed={task.completed}
-                      className={`mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
-                        task.completed
-                          ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                          : "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--muted)]"
-                      }`}
-                      aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-                    >
-                      {task.completed ? <CheckIcon className="h-4 w-4" /> : null}
-                    </button>
+                    <div className="flex flex-col items-center gap-3 mt-1">
+                      <Checkbox
+                        checked={selectedIds.has(task.id)}
+                        onChange={() => toggleSelection(task.id)}
+                      />
+                      <button
+                        onClick={() => toggleTaskCompletion(task.id)}
+                        aria-pressed={task.completed}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                          task.completed
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                            : "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--muted)]"
+                        }`}
+                        aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
+                      >
+                        {task.completed ? <CheckIcon className="h-4 w-4" /> : null}
+                      </button>
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -195,13 +233,24 @@ export default function TasksPage() {
                           </span>
                         )}
                       </div>
+
+                      <AttributionRow
+                        ownerId={task.ownerId}
+                        assigneeIds={task.assigneeIds}
+                        createdAt={task.createdAt}
+                        isPrivate={task.visibility === "private"}
+                        members={data.members || {}}
+                      />
                     </div>
                   </div>
 
                   <EntityActions
                     onEdit={() => setEditingTask(task)}
-                    onDelete={() => setTaskToDelete(task)}
-                    canEdit={isOwner || task.ownerId === user?.uid}
+                    onDelete={() => {
+                      setSelectedIds(new Set([task.id]));
+                      setIsBulkDeleteOpen(true);
+                    }}
+                    canEdit={task.ownerId === user?.uid}
                   />
                 </div>
               </Surface>
@@ -209,6 +258,13 @@ export default function TasksPage() {
           })}
         </div>
       )}
+
+      <BulkActions
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setIsBulkDeleteOpen(true)}
+        noun="task"
+      />
 
       <FormDialog
         open={isCreateOpen}
@@ -252,15 +308,19 @@ export default function TasksPage() {
       </FormDialog>
 
       <ConfirmDialog
-        open={Boolean(taskToDelete)}
-        title="Delete task"
-        description={`Delete "${taskToDelete?.title ?? "this task"}"?`}
-        onCancel={() => setTaskToDelete(null)}
+        open={isBulkDeleteOpen}
+        title={`Delete ${selectedIds.size === 1 ? "task" : "tasks"}`}
+        description={`Are you sure you want to delete ${
+          selectedIds.size === 1 ? "this task" : `${selectedIds.size} tasks`
+        }? They will be moved to the Recycle Bin.`}
+        onCancel={() => {
+          setIsBulkDeleteOpen(false);
+          if (selectedIds.size === 1) setSelectedIds(new Set());
+        }}
         onConfirm={() => {
-          if (taskToDelete) {
-            deleteTask(taskToDelete.id);
-          }
-          setTaskToDelete(null);
+          deleteTasks(Array.from(selectedIds));
+          setSelectedIds(new Set());
+          setIsBulkDeleteOpen(false);
         }}
       />
     </div>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActions } from "@/components/workspace/bulk-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/forms/field";
 import { ProjectForm } from "@/components/forms/project-form";
@@ -20,20 +22,22 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Select } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
+import { AttributionRow } from "@/components/workspace/attribution-row";
 import { getProjectStatusTone } from "@/lib/presentation";
 import type { Project } from "@/lib/types";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower } from "@/lib/utils";
 
 export default function ProjectsPage() {
-  const { data, user, userRole, searchQuery, createProject, updateProject, deleteProject } =
+  const { data, user, userRole, searchQuery, createProject, updateProject, deleteProjects } =
     useWorkHub();
   const isOwner = userRole === "owner";
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const viewableProjects = isOwner ? data.projects : data.projects.filter(p => p.assigneeIds?.includes(user?.uid ?? ""));
 
@@ -50,6 +54,24 @@ export default function ProjectsPage() {
 
     return matchesQuery && matchesStatus;
   });
+
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === projects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(projects.map((p) => p.id)));
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -97,6 +119,16 @@ export default function ProjectsPage() {
         }
       />
 
+      {projects.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <Checkbox
+            checked={selectedIds.size === projects.length && projects.length > 0}
+            onChange={toggleAll}
+          />
+          <span className="text-sm font-medium text-[var(--muted)]">Select all visible</span>
+        </div>
+      )}
+
       {viewableProjects.length === 0 ? (
         <EmptyState
           icon={<FolderIcon className="h-5 w-5" />}
@@ -125,29 +157,40 @@ export default function ProjectsPage() {
             return (
               <Surface key={project.id} className="p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-[var(--foreground)]">
-                        {project.name}
-                      </h2>
-                      <Badge tone={getProjectStatusTone(project.status)}>
-                        {project.status}
-                      </Badge>
-                      {project.visibility === "private" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
-                          <LockIcon className="h-3 w-3" />
-                          Private
-                        </span>
-                      )}
+                  <div className="flex gap-4">
+                    <div className="pt-1">
+                      <Checkbox
+                        checked={selectedIds.has(project.id)}
+                        onChange={() => toggleSelection(project.id)}
+                      />
                     </div>
-                    <p className="text-sm leading-6 text-[var(--muted)]">
-                      {project.description || "No description yet."}
-                    </p>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold text-[var(--foreground)]">
+                          {project.name}
+                        </h2>
+                        <Badge tone={getProjectStatusTone(project.status)}>
+                          {project.status}
+                        </Badge>
+                        {project.visibility === "private" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
+                            <LockIcon className="h-3 w-3" />
+                            Private
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm leading-6 text-[var(--muted)]">
+                        {project.description || "No description yet."}
+                      </p>
+                    </div>
                   </div>
                   <EntityActions
                     onEdit={() => setEditingProject(project)}
-                    onDelete={() => setProjectToDelete(project)}
-                    canEdit={isOwner || project.ownerId === user?.uid}
+                    onDelete={() => {
+                      setSelectedIds(new Set([project.id]));
+                      setIsBulkDeleteOpen(true);
+                    }}
+                    canEdit={project.ownerId === user?.uid}
                   />
                 </div>
 
@@ -163,11 +206,26 @@ export default function ProjectsPage() {
                     </span>
                   )}
                 </div>
+
+                <AttributionRow
+                  ownerId={project.ownerId}
+                  assigneeIds={project.assigneeIds}
+                  createdAt={project.createdAt}
+                  isPrivate={project.visibility === "private"}
+                  members={data.members || {}}
+                />
               </Surface>
             );
           })}
         </div>
       )}
+
+      <BulkActions
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setIsBulkDeleteOpen(true)}
+        noun="project"
+      />
 
       <FormDialog
         open={isCreateOpen}
@@ -209,15 +267,19 @@ export default function ProjectsPage() {
       </FormDialog>
 
       <ConfirmDialog
-        open={Boolean(projectToDelete)}
-        title="Delete project"
-        description={`Delete "${projectToDelete?.name ?? "this project"}"? Related tasks will stay in your list without a project.`}
-        onCancel={() => setProjectToDelete(null)}
+        open={isBulkDeleteOpen}
+        title={`Delete ${selectedIds.size === 1 ? "project" : "projects"}`}
+        description={`Are you sure you want to delete ${
+          selectedIds.size === 1 ? "this project" : `${selectedIds.size} projects`
+        }? Related tasks will stay in your list without a project. They will be moved to the Recycle Bin.`}
+        onCancel={() => {
+          setIsBulkDeleteOpen(false);
+          if (selectedIds.size === 1) setSelectedIds(new Set());
+        }}
         onConfirm={() => {
-          if (projectToDelete) {
-            deleteProject(projectToDelete.id);
-          }
-          setProjectToDelete(null);
+          deleteProjects(Array.from(selectedIds));
+          setSelectedIds(new Set());
+          setIsBulkDeleteOpen(false);
         }}
       />
     </div>
