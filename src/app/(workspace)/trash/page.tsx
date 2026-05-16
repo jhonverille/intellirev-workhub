@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  CalendarIcon,
   CheckSquareIcon,
   FolderIcon,
   LinkIcon,
@@ -24,7 +23,7 @@ export default function TrashPage() {
   const { data, user, restoreItem, permanentDeleteItem, emptyTrash } = useWorkHub();
   const [filter, setFilter] = useState<TrashType | "all">("all");
 
-  const isVisible = (item: any) =>
+  const isVisible = (item: { visibility?: string; ownerId?: string; assigneeIds?: string[] }) =>
     item.visibility !== "private" || item.ownerId === user?.uid || item.assigneeIds?.includes(user?.uid ?? "");
 
   const trashItems = [

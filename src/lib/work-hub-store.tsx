@@ -43,7 +43,7 @@ import {
   GoogleAuthProvider,
   type User,
 } from "firebase/auth";
-import { doc, deleteDoc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 
 type WorkspaceContextValue = {
   data: WorkspaceData;
@@ -318,17 +318,18 @@ function workspaceReducer(state: State, action: Action): State {
     }
     case "restore-item": {
       const { type, id } = action.payload;
-      const item = (state.data.trash[type] as any[]).find((i) => i.id === id);
+      const collection = state.data.trash[type] as (Task | Project | Note | QuickLink)[];
+      const item = collection.find((i) => i.id === id);
       if (!item) return state;
 
       return {
         ...state,
         data: {
           ...state.data,
-          [type]: [item, ...(state.data[type] as any[])],
+          [type]: [item, ...(state.data[type] as (Task | Project | Note | QuickLink)[])],
           trash: {
             ...state.data.trash,
-            [type]: (state.data.trash[type] as any[]).filter((i) => i.id !== id),
+            [type]: (state.data.trash[type] as (Task | Project | Note | QuickLink)[]).filter((i) => i.id !== id),
           },
         },
       };
@@ -341,7 +342,7 @@ function workspaceReducer(state: State, action: Action): State {
           ...state.data,
           trash: {
             ...state.data.trash,
-            [type]: (state.data.trash[type] as any[]).filter((i) => i.id !== id),
+            [type]: (state.data.trash[type] as (Task | Project | Note | QuickLink)[]).filter((i) => i.id !== id),
           },
         },
       };
@@ -461,7 +462,7 @@ function stableHash(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableHash).join(",")}]`;
   const sorted = Object.keys(value as object)
     .sort()
-    .map((k) => `${JSON.stringify(k)}:${stableHash((value as any)[k])}`);
+    .map((k) => `${JSON.stringify(k)}:${stableHash((value as Record<string, unknown>)[k])}`);
   return `{${sorted.join(",")}}`;
 }
 
@@ -521,8 +522,10 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
   // Clear auth error when the user navigates
   useEffect(() => {
-    setAuthError(null);
-  }, [pathname]);
+    if (authError !== null) {
+      setTimeout(() => setAuthError(null), 0);
+    }
+  }, [pathname, authError]);
 
   // 1. Initial Local Storage Load
   useEffect(() => {
@@ -534,9 +537,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("[WorkHub] Local storage load error:", err);
-      setStorageError("Failed to load local data.");
+      const msg = "Failed to load local data.";
+      if (storageError !== msg) {
+        setTimeout(() => setStorageError(msg), 0);
+      }
     }
-  }, []);
+  }, [storageError]);
 
   // 2. Auth & User Profile Lifecycle
   useEffect(() => {
@@ -601,11 +607,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             createdAt: new Date().toISOString(),
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[WorkHub] User doc check/create error:", err);
         if (isMounted) {
-          setWorkspaceLoadError(err.message || "Failed to connect to user profile.");
-          setInitialized(true);
+          const msg = err instanceof Error ? err.message : "Failed to connect to user profile.";
+          setWorkspaceLoadError(prev => prev !== msg ? msg : prev);
+          setInitialized(prev => !prev ? true : prev);
           return;
         }
       }
@@ -676,14 +683,16 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
   // 3. Workspace Sync (Remote -> Local)
   useEffect(() => {
     if (!user || !initialized || !currentWorkspaceId) {
-      if (initialized && !currentWorkspaceId) setIsSyncing(false);
+      if (initialized && !currentWorkspaceId && isSyncing) {
+        setTimeout(() => setIsSyncing(false), 0);
+      }
       return;
     }
 
     const wsDocRef = doc(db, "workspaces", currentWorkspaceId);
     const privateWsRef = doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`);
     console.log("[WorkHub] Syncing workspace:", currentWorkspaceId);
-    setIsSyncing(true);
+    setTimeout(() => setIsSyncing(true), 0);
 
     let lastPublicData: WorkspaceData | null = null;
     let lastPrivateData: WorkspaceData | null = null;
@@ -747,14 +756,16 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       if (snapshot.exists()) {
         lastPublicData = normalizeWorkspaceData(snapshot.data());
       } else {
-        setWorkspaceLoadError("Workspace not found or access denied.");
+        const msg = "Workspace not found or access denied.";
+        setWorkspaceLoadError(prev => prev !== msg ? msg : prev);
       }
       mergeAndDispatch();
-      setIsSyncing(false);
+      setIsSyncing(prev => prev ? false : prev);
     }, (err) => {
       console.error("[WorkHub] Workspace sync error:", err);
-      setWorkspaceLoadError("Failed to connect to workspace.");
-      setIsSyncing(false);
+      const msg = "Failed to connect to workspace.";
+      setWorkspaceLoadError(prev => prev !== msg ? msg : prev);
+      setIsSyncing(prev => prev ? false : prev);
     });
 
     const unsubPrivate = onSnapshot(privateWsRef, (snapshot) => {
@@ -782,7 +793,9 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
-      setStorageError(null);
+      if (storageError !== null) {
+        setTimeout(() => setStorageError(null), 0);
+      }
 
         // 1. CLOBBERING PROTECTION: Only push to Firestore if we have successfully synced from remote at least once.
         // This prevents new members (with default data) from overwriting a workspace before their first snapshot arrives.
@@ -821,11 +834,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           Promise.all([publicProm, privateProm]).finally(() => setIsSyncing(false));
         }
     } catch {
-      setStorageError(
-        "Work Hub could not save your latest changes. Your current session still works, but changes may not persist.",
-      );
+      const msg = "Work Hub could not save your latest changes. Your current session still works, but changes may not persist.";
+      if (storageError !== msg) {
+        setTimeout(() => setStorageError(msg), 0);
+      }
     }
-  }, [initialized, state.data, user, remoteDataHash, currentWorkspaceId]);
+  }, [initialized, state.data, user, remoteDataHash, currentWorkspaceId, storageError]);
 
   useEffect(() => {
     if (!initialized) {
@@ -1138,11 +1152,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           // Re-enable popup. Redirect often fails due to strict third-party cookie blocking in modern browsers.
           await signInWithPopup(auth, googleProvider);
           setIsAuthenticating(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const authError = error as { code?: string; message?: string };
           // Do NOT console.error here because Next.js 15 dev server intercepts it
           // and shows a huge error overlay, which interrupts the fallback redirect UX.
           
-          if (error.code === "auth/popup-blocked") {
+          if (authError.code === "auth/popup-blocked") {
             // Do NOT set an error string here. We want a silent fallback so the user 
             // just sees the loading spinner continue as they are seamlessly redirected.
             try {
@@ -1150,16 +1165,17 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
               const freshProvider = new GoogleAuthProvider();
               freshProvider.setCustomParameters({ prompt: "select_account" });
               await signInWithRedirect(auth, freshProvider);
-            } catch (redirectError: any) {
-              setAuthError(redirectError.message || "Redirect failed.");
+            } catch (redirectError: unknown) {
+              const rError = redirectError as { message?: string };
+              setAuthError(rError.message || "Redirect failed.");
               setIsAuthenticating(false);
             }
-          } else if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-by-user") {
+          } else if (authError.code === "auth/popup-closed-by-user" || authError.code === "auth/cancelled-by-user") {
             setAuthError("Sign-in cancelled or interrupted.");
             setIsAuthenticating(false);
           } else {
-            console.error("Unhandled sign in error:", error);
-            setAuthError(error.message || "Sign in failed.");
+            console.error("Unhandled sign in error:", authError);
+            setAuthError(authError.message || "Sign in failed.");
             setIsAuthenticating(false);
           }
         }
@@ -1175,7 +1191,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           // Hard reload the browser to clear completely the Firebase auth internal iframe cache.
           // This prevents the "popup blocked on second attempt" bug caused by state retention.
           window.location.reload();
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("Sign out failed", error);
         }
       },

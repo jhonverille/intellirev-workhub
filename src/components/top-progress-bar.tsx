@@ -11,8 +11,10 @@ export function TopProgressBar() {
 
   useEffect(() => {
     // When the path or search params change, we consider the navigation finished
-    setLoading(false);
-  }, [pathname, searchParams]);
+    if (loading) {
+      setTimeout(() => setLoading(false), 0);
+    }
+  }, [pathname, searchParams, loading]);
 
   // We need a way to trigger the loading state. 
   // In Next.js App Router, there's no global "beforeNavigate" event.

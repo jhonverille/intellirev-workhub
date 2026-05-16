@@ -9,13 +9,13 @@ export default function InvitePage() {
 
   useEffect(() => {
     // Extract inviteId from URL path since this is a static route handling dynamic paths via rewrites.
-    // Example: /invite/invite-123 -> inviteId is 'invite-123'
     const pathParts = window.location.pathname.split('/');
-    const id = pathParts.pop() || pathParts.pop(); // pop once or twice depending on trailing slash
+    const id = pathParts.pop() || pathParts.pop();
+    
     if (id && id !== 'invite') {
-      setInviteId(id);
+      setTimeout(() => setInviteId(id), 0);
     } else {
-      setIsMissingId(true);
+      setTimeout(() => setIsMissingId(true), 0);
     }
   }, []);
 

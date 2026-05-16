@@ -146,7 +146,7 @@ export default function InvitePageClient({ inviteId }: { inviteId: string }) {
           <div className="space-y-2">
             <h1 className="text-xl font-bold text-[var(--foreground)]">Workspace Invitation</h1>
             <p className="text-sm text-[var(--muted)]">
-              You've been invited to join a workspace. Please sign in to accept the invitation.
+              You&apos;ve been invited to join a workspace. Please sign in to accept the invitation.
             </p>
           </div>
           <Button onClick={signIn} className="w-full">

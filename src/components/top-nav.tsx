@@ -13,12 +13,11 @@ import {
   NoteIcon,
   SearchIcon,
   SunIcon,
-  UserIcon,
   XIcon,
 } from "@/components/icons";
 import { pageTitles } from "@/lib/navigation";
 import { useWorkHub } from "@/lib/work-hub-store";
-import { getInitials, safeLower } from "@/lib/utils";
+import { safeLower } from "@/lib/utils";
 import { UserButton } from "./user-button";
 
 type TopNavProps = {

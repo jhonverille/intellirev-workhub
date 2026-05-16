@@ -1,28 +1,36 @@
-# Project Manifest - Push Changes to Remote
+# Project Manifest - Pull and Sync Changes
 
 ## 1. Project Goal
-Push current local changes (modified and relevant untracked files) to the remote GitHub repository `jhonverille/workhub-intellirev` on the `master` branch.
+Synchronize the local repository with the remote `master` branch, resolving any existing merge conflicts to ensure the workspace is up-to-date and stable.
 
 ## 2. Actionable Task List
-- [x] Prepare files for push [TASK-ID: 1]
-    - [x] Read content of all modified files.
-    - [x] Read content of relevant untracked files (e.g., BUG_REPORT.md, ERROR_ANALYSIS.md, FIXES_CHECKLIST.md, REVIEW.md, SUMMARY.txt).
-- [x] Push changes to remote using GitHub MCP [TASK-ID: 2]
-    - [x] Call `push_files` with the collected file contents and a descriptive commit message.
-- [ ] Verify push success [TASK-ID: 3]
-    - [ ] Check git status locally to confirm it's in sync with remote (or check via GitHub MCP).
+- [ ] **Task 1: Initialize Manifest and Analyze Conflicts** [TASK-ID: 1]
+    - [ ] Create a clean manifest.md.
+    - [ ] Identify all files with merge conflicts.
+- [ ] **Task 2: Resolve Merge Conflicts** [TASK-ID: 2]
+    - [ ] Resolve conflicts in `src/app/(workspace)/dashboard/page.tsx`.
+    - [ ] Resolve conflicts in `src/components/sidebar.tsx`.
+    - [ ] Resolve conflicts in `src/lib/work-hub-store.tsx`.
+- [ ] **Task 3: Synchronize with Remote** [TASK-ID: 3]
+    - [ ] Run `git pull origin master` (if not already completed by the conflict resolution).
+    - [ ] Ensure all local changes are committed or stashed if necessary.
+- [ ] **Task 4: Validation** [TASK-ID: 4]
+    - [ ] Verify `npm run build` passes.
+    - [ ] Verify `npm run lint` passes.
 
 ## 3. Dependency Map
-- TASK-ID: 2 depends on TASK-ID: 1.
-- TASK-ID: 3 depends on TASK-ID: 2.
+- Task 2 depends on Task 1.
+- Task 3 depends on Task 2.
+- Task 4 depends on Task 3.
 
 ## 4. Fallback Plan
-If `push_files` fails, attempt to use local `git push` if authenticated, or report error details for manual resolution.
+If conflicts are too complex or state is corrupted, stash local changes and perform a hard reset to `origin/master`, then selectively re-apply changes.
 
 ## 5. Error-Handling Rules
-- Classification: Network Error, Authentication Error, Merge Conflict.
-- Recovery: Retry once for Network errors. If merge conflict, stop and ask for instructions.
+- Classification: Merge Conflict, Build Error, Lint Error.
+- Recovery: 
+    - Merge Conflict: Manually inspect and combine changes, prioritizing remote functionality unless local changes are critical.
+    - Build/Lint Error: Resolve following existing patterns in the codebase.
 
 ## 6. Execution Log
-- [2026-05-16 13:40] Started manifest update for pushing changes.
-- [2026-05-16 13:42] Collected all file contents. Ready to push.
+- [2026-05-16 13:51] Manifest created. Starting conflict analysis.

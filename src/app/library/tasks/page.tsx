@@ -38,6 +38,7 @@ export default function TasksPage() {
     deleteTasks,
     toggleTaskCompletion,
   } = useWorkHub();
+
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -50,7 +51,7 @@ export default function TasksPage() {
     (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
   );
 
-  const query = safeLower(`${searchQuery} ${localSearch}`.trim());
+  const query = safeLower(`${searchQuery || ""} ${localSearch}`.trim());
   const tasks = sortByUpdatedAt(viewableTasks).filter((task) => {
     const matchesQuery = query
       ? [task.title, task.description]

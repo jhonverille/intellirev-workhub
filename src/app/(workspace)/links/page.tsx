@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkActions } from "@/components/workspace/bulk-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";

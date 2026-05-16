@@ -4,15 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { 
   LogIn, 
   LogOut, 
   User as UserIcon, 
   Cloud, 
-  CloudOff, 
   RefreshCw,
   Settings,
-  ShieldCheck,
   AlertCircle,
   X
 } from "lucide-react";
@@ -107,7 +106,13 @@ export function UserButton() {
       >
         <div className="w-8 h-8 rounded-full overflow-hidden bg-[var(--accent-soft)] flex items-center justify-center border border-[var(--line)]">
           {user.photoURL ? (
-            <img src={user.photoURL} alt={user.displayName || "User"} className="w-full h-full object-cover" />
+            <Image 
+              src={user.photoURL} 
+              alt={user.displayName || "User avatar"} 
+              width={32} 
+              height={32} 
+              className="w-full h-full object-cover" 
+            />
           ) : (
             <UserIcon className="w-4 h-4 text-[var(--accent)]" />
           )}
@@ -140,7 +145,15 @@ export function UserButton() {
             <div className="p-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-border shadow-sm">
-                  {user.photoURL && <img src={user.photoURL} alt="" className="w-full h-full" />}
+                  {user.photoURL && (
+                    <Image 
+                      src={user.photoURL} 
+                      alt={user.displayName || "User email"} 
+                      width={40} 
+                      height={40} 
+                      className="w-full h-full object-cover" 
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-bold">{user.displayName}</span>

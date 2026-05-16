@@ -47,7 +47,6 @@ export default function TeamPage() {
     userRole,
     currentWorkspaceId,
     initialized,
-    isSyncing,
     workspaceLoadError,
     signOut,
   } = useWorkHub();
