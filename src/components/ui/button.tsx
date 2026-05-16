@@ -2,8 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "sm" | "md" | "lg";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "soft";
+  size?: "xs" | "sm" | "md" | "lg";
   icon?: ReactNode;
 };
 
@@ -16,9 +16,12 @@ const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-strong)] active:translate-y-px",
   danger:
     "bg-[var(--danger-soft)] text-[var(--danger)] ring-1 ring-[color-mix(in_srgb,var(--danger)_16%,transparent)] hover:bg-[color-mix(in_srgb,var(--danger-soft)_65%,white)] active:translate-y-px",
+  soft:
+    "bg-[var(--surface)] text-[var(--foreground)] ring-1 ring-[var(--line)] hover:bg-[var(--surface-strong)] active:translate-y-px",
 };
 
 const sizes: Record<NonNullable<ButtonProps["size"]>, string> = {
+  xs: "h-7 px-2.5 text-xs",
   sm: "h-9 px-3 text-sm",
   md: "h-10 px-4 text-sm",
   lg: "h-12 px-5 text-base",

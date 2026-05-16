@@ -1,35 +1,28 @@
-# Project Manifest - Team Section Module
+# Project Manifest - Push Changes to Remote
 
 ## 1. Project Goal
-Implement the "Team Section" module to transition the workspace directory into a collaborative environment. This involves schema updates for assignee support on notes, redesigning the team directory to show the workspace head and members, enforcing creator-scoped privacy and edit access, adding entity attribution rows, and preventing circular workspace invites.
+Push current local changes (modified and relevant untracked files) to the remote GitHub repository `jhonverille/workhub-intellirev` on the `master` branch.
 
 ## 2. Actionable Task List
-- [x] Phase 1 — Schema Updates (Role enum, Notes assignees, Workspace description) [TASK-ID: 1]
-- [x] Phase 2 — Store & Sidebar Updates (Access to /team, store support for new schema) [TASK-ID: 2]
-- [x] Phase 3 — Note Form (Member picker for collaborative notes) [TASK-ID: 3]
-- [x] Phase 4 — Team Page Redesign (Workspace Directory view, Head UI, member grids) [TASK-ID: 4]
-- [x] Phase 5 — Attribution Rows (UI for showing creator, assigning, parsing isPrivate) [TASK-ID: 5]
-- [x] Phase 6 — Invite Guard (Anti-circular invite loop, default "member" role check) [TASK-ID: 6]
-- [x] Verify builds without errors [TASK-ID: 7]
+- [x] Prepare files for push [TASK-ID: 1]
+    - [x] Read content of all modified files.
+    - [x] Read content of relevant untracked files (e.g., BUG_REPORT.md, ERROR_ANALYSIS.md, FIXES_CHECKLIST.md, REVIEW.md, SUMMARY.txt).
+- [x] Push changes to remote using GitHub MCP [TASK-ID: 2]
+    - [x] Call `push_files` with the collected file contents and a descriptive commit message.
+- [ ] Verify push success [TASK-ID: 3]
+    - [ ] Check git status locally to confirm it's in sync with remote (or check via GitHub MCP).
 
 ## 3. Dependency Map
-- TASK-ID: 1 -> Prerequisite for all other changes.
-- TASK-ID: 2 -> Requires TASK-ID: 1.
-- TASK-ID: 3 -> Requires TASK-ID: 1.
-- TASK-ID: 4 -> Requires TASK-ID: 1.
-- TASK-ID: 5 -> Requires TASK-ID: 1, 4.
-- TASK-ID: 6 -> Requires understanding of Firebase logic in the app.
+- TASK-ID: 2 depends on TASK-ID: 1.
+- TASK-ID: 3 depends on TASK-ID: 2.
 
-## 4. Contingency Plan (Plan B)
-- **Problem:** Data migrations for existing notes lacking `assigneeIds`.
-- **Recovery:** Handled by falling back to empty arrays in the normalization logic (`default-data.ts`).
+## 4. Fallback Plan
+If `push_files` fails, attempt to use local `git push` if authenticated, or report error details for manual resolution.
 
-## 5. Error Handling Rules
-- Type errors in TS are addressed immediately by refining schema definitions.
+## 5. Error-Handling Rules
+- Classification: Network Error, Authentication Error, Merge Conflict.
+- Recovery: Retry once for Network errors. If merge conflict, stop and ask for instructions.
 
 ## 6. Execution Log
-- [2026-04-08] Commenced work on Team Section Module.
-- [2026-04-08] Completed Phases 1 through 4 (Schema, Sidebar, Note Form, Team Page).
-- [2026-04-08] Completed Phase 5 (Attribution Rows on Task, Project, Note cards) and creator privacy logic.
-- [2026-04-08] Completed Phase 6 (Anti-circular Invites).
-- [2026-04-08] Verified TypeScript compilation successful.
+- [2026-05-16 13:40] Started manifest update for pushing changes.
+- [2026-05-16 13:42] Collected all file contents. Ready to push.

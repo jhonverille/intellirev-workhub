@@ -38,7 +38,10 @@ type SidebarProps = {
 
 export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const { data, userRole } = useWorkHub();
+  const { data, userRole, user } = useWorkHub();
+  const pendingCount = (data.assignmentRequests || []).filter(
+    (r) => r.toId === user?.uid && r.status === "pending"
+  ).length;
 
   const filteredNavigation = appNavigation;
 
@@ -94,7 +97,12 @@ export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
                 "relative z-10 h-5 w-5 transition-transform duration-200 group-hover:scale-110",
                 active && "text-[var(--background)]"
               )} />
-              <span className="relative z-10">{item.label}</span>
+              <span className="relative z-10 flex-1">{item.label}</span>
+              {item.href === "/dashboard" && pendingCount > 0 && (
+                <span className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white shadow-sm ring-2 ring-[var(--surface)]">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -1,0 +1,37 @@
+ASSIGNMENT REQUEST BUG ANALYSIS - EXECUTIVE SUMMARY
+
+CRITICAL BUG: Race Condition in Firestore Sync
+File: src/lib/work-hub-store.tsx
+Lines: 691-694
+Severity: CRITICAL
+
+THE PROBLEM:
+- Two Firestore snapshot listeners fire independently (public + private docs)
+- If private listener fires FIRST, merge uses EMPTY default data
+- Assignment requests are lost before recipient sees them
+
+CURRENT CODE (BROKEN):
+  const mergeAndDispatch = () => {
+    if (!lastPublicData && !lastPrivateData) return;
+    const base = lastPublicData || normalizeWorkspaceData({});
+    const priv = lastPrivateData || normalizeWorkspaceData({});
+
+FIX:
+  const mergeAndDispatch = () => {
+    if (!lastPublicData) return;  // MUST have public data
+    const base = lastPublicData;
+    const priv = lastPrivateData || normalizeWorkspaceData({});
+
+SECONDARY BUG: Requests written to private docs
+File: src/lib/work-hub-store.tsx
+Line: 806
+Severity: MEDIUM
+
+FIX: Delete the line: assignmentRequests: [],
+
+TERTIARY BUG: Confusing dedupe call
+File: src/lib/work-hub-store.tsx
+Line: 729
+Severity: LOW
+
+FIX: Change second parameter from [] to priv.assignmentRequests || []

@@ -78,7 +78,7 @@ export function NoteForm({ initialValue, members = [], onSubmit, onCancel }: Not
           )}
         </Field>
 
-        <Field label="Privacy" hint="Private notes are only visible to you and assignees.">
+        <Field label="Privacy" hint="Private notes are only visible to you.">
           {(fieldProps) => (
             <Select
               {...fieldProps}
@@ -86,14 +86,14 @@ export function NoteForm({ initialValue, members = [], onSubmit, onCancel }: Not
               onChange={(event) => setVisibility(event.target.value as "public" | "private")}
             >
               <option value="public">Public (Workspace)</option>
-              <option value="private">Private (You + Assignees)</option>
+              <option value="private">Private (Only You)</option>
             </Select>
           )}
         </Field>
       </div>
 
-      {members.length > 0 && (
-        <Field label="Share with" hint="Assignees can view this note even if it's private.">
+      {visibility === "public" && members.length > 0 && (
+        <Field label="Share with" hint="Select team members who can view and edit this note.">
           {() => (
             <div className="grid gap-2 sm:grid-cols-2 mt-2">
               {members.map((member) => (

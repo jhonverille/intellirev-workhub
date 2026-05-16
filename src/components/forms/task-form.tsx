@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { taskPriorities, taskStatuses } from "@/lib/navigation";
 import type { Project, Task, TaskDraft, Member } from "@/lib/types";
 import { fromDateInputValue, toDateInputValue } from "@/lib/utils";
+import { useWorkHub } from "@/lib/work-hub-store";
 
 type TaskFormProps = {
   initialValue?: Task;
@@ -19,6 +20,11 @@ type TaskFormProps = {
 };
 
 export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }: TaskFormProps) {
+  const { 
+    requestAssignment, 
+    data: { assignmentRequests = [] } 
+  } = useWorkHub();
+  const id = initialValue?.id;
   const [title, setTitle] = useState(initialValue?.title ?? "");
   const [description, setDescription] = useState(initialValue?.description ?? "");
   const [priority, setPriority] = useState<TaskDraft["priority"]>(
@@ -30,6 +36,7 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
   const [dueDate, setDueDate] = useState(toDateInputValue(initialValue?.dueDate ?? null));
   const [projectId, setProjectId] = useState(initialValue?.projectId ?? "");
   const [assigneeIds, setAssigneeIds] = useState<string[]>(initialValue?.assigneeIds ?? []);
+  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
   const [error, setError] = useState("");
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -50,6 +57,7 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
       projectId: projectId || null,
       completed: status === "done",
       assigneeIds,
+      visibility,
     });
   };
 
@@ -147,32 +155,62 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
         </Field>
       </div>
 
-      <Field label="Assignees" hint="Select team members to assign to this task.">
-        {() => (
-          <div className="grid gap-2 sm:grid-cols-2 mt-2">
-            {members.length === 0 && (
-              <p className="text-sm text-[var(--muted)] col-span-2">No members in workspace.</p>
-            )}
-            {members.map((member) => (
-              <label key={member.uid} className="flex flex-1 items-center gap-3 text-sm cursor-pointer p-2.5 rounded-xl hover:bg-[var(--surface-strong)] transition border border-[var(--line)]">
-                <input
-                  type="checkbox"
-                  checked={assigneeIds.includes(member.uid)}
-                  onChange={(e) => {
-                    if (e.target.checked) setAssigneeIds([...assigneeIds, member.uid]);
-                    else setAssigneeIds(assigneeIds.filter((id) => id !== member.uid));
-                  }}
-                  className="h-4 w-4 rounded border-[var(--line)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
-                />
-                <div className="flex flex-col min-w-0 leading-tight">
-                  <span className="truncate font-medium">{member.displayName || "Unknown User"}</span>
-                  <span className="truncate text-[10px] text-[var(--muted)]">{member.email}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Privacy">
+          {(fieldProps) => (
+            <Select
+              {...fieldProps}
+              value={visibility}
+              onChange={(event) => setVisibility(event.target.value as "public" | "private")}
+            >
+              <option value="public">Public (Workspace)</option>
+              <option value="private">Private (Only You)</option>
+            </Select>
+          )}
+        </Field>
+      </div>
+
+      {visibility === "public" && (
+        <Field label="Assignees" hint="Select team members to assign to this task.">
+          {() => (
+            <div className="grid gap-2 sm:grid-cols-2 mt-2">
+              {members.length === 0 && (
+                <p className="text-sm text-[var(--muted)] col-span-2">No members in workspace.</p>
+              )}
+              {members.map((member) => {
+                const isAssigned = assigneeIds.includes(member.uid);
+                const pendingRequest = assignmentRequests.find(
+                  (r) => r.toId === member.uid && r.itemId === id && r.status === "pending"
+                );
+
+                return (
+                  <div key={member.uid} className="flex items-center justify-between gap-3 text-sm p-2.5 rounded-xl border border-[var(--line)] bg-[var(--surface)]">
+                    <div className="flex flex-col min-w-0 leading-tight">
+                      <span className="truncate font-medium">{member.displayName || "Unknown User"}</span>
+                      <span className="truncate text-[10px] text-[var(--muted)]">{member.email}</span>
+                    </div>
+                    
+                    {isAssigned ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--success)] bg-[var(--success-faint)] px-2 py-1 rounded">Assigned</span>
+                    ) : pendingRequest ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-faint)] px-2 py-1 rounded">Pending</span>
+                    ) : (
+                      <Button 
+                        size="xs" 
+                        variant="soft"
+                        disabled={!id}
+                        onClick={() => id && requestAssignment(id, "task", title, member.uid)}
+                      >
+                        {id ? "Request" : "Save First"}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Field>
+      )}
 
       <div className="flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>

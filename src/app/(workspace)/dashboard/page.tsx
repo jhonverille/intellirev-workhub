@@ -9,6 +9,7 @@ import {
   LockIcon,
   NoteIcon,
   SparkIcon,
+  UserIcon,
 } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -22,7 +23,10 @@ import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, formatRelativeDate, sortByUpdatedAt } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { data, user, userRole, currentWorkspaceId } = useWorkHub();
+  const { data, user, userRole, currentWorkspaceId, respondToAssignment } = useWorkHub();
+  const invitationRequests = (data.assignmentRequests || []).filter(
+    (r) => r.toId === user?.uid && r.status === "pending"
+  );
 
   const viewableProjects = data.projects.filter(
     (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
@@ -62,6 +66,57 @@ export default function DashboardPage() {
         title="Your work in one place"
         description="Keep momentum visible with today's focus, recent activity, and a quick read on the projects that still need attention."
       />
+      
+      {invitationRequests.length > 0 && (
+        <Surface className="p-6 border-2 border-[var(--accent)] bg-[var(--accent-faint)]">
+          <div className="flex items-center gap-3">
+            <span className="rounded-3xl bg-[var(--accent)] p-3 text-white shadow-sm ring-4 ring-[var(--accent-faint)]">
+              <UserIcon className="h-6 w-6" />
+            </span>
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">
+                Collaboration Invitations
+              </h2>
+              <p className="text-sm text-[var(--muted)]">
+                New projects or tasks have been shared with you. Accept them to add to your workspace.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {invitationRequests.map((req) => (
+              <div 
+                key={req.id} 
+                className="flex items-center justify-between gap-4 p-4 rounded-[20px] bg-[var(--surface)] border border-[var(--line)] shadow-sm"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-faint)] px-2 py-0.5 rounded">
+                      {req.itemType}
+                    </span>
+                    <span className="text-[10px] text-[var(--muted)]">from {req.fromName}</span>
+                  </div>
+                  <p className="font-semibold text-[var(--foreground)] truncate">{req.itemName}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button 
+                    onClick={() => respondToAssignment(req.id, "accepted")}
+                    className="h-8 px-3 rounded-full bg-[var(--accent)] text-xs font-bold text-white hover:scale-105 transition active:scale-95 shadow-lg shadow-[var(--accent-faint)]"
+                  >
+                    Accept
+                  </button>
+                  <button 
+                    onClick={() => respondToAssignment(req.id, "declined")}
+                    className="h-8 px-3 rounded-full bg-[var(--surface-strong)] text-xs font-bold text-[var(--muted)] hover:bg-[var(--line)] transition active:scale-95"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard

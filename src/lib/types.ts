@@ -111,6 +111,7 @@ export type WorkspaceData = {
     links: QuickLink[];
   };
   settings: WorkspaceSettings;
+  assignmentRequests?: AssignmentRequest[];
 };
 
 export type TaskDraft = Omit<
@@ -136,5 +137,17 @@ export type ActivityEvent = {
   action: "created" | "updated" | "deleted" | "completed";
   entityType: "project" | "task" | "note" | "link";
   entityName: string;
+  timestamp: string;
+};
+
+export type AssignmentRequest = {
+  id: string;
+  itemId: string;
+  itemType: "project" | "task";
+  itemName: string;
+  fromId: string;
+  fromName: string;
+  toId: string;
+  status: "pending" | "accepted" | "declined";
   timestamp: string;
 };

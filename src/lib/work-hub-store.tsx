@@ -16,6 +16,7 @@ import {
   STORAGE_KEY,
 } from "@/lib/default-data";
 import type {
+  AssignmentRequest,
   Note,
   NoteDraft,
   Project,
@@ -68,6 +69,8 @@ type WorkspaceContextValue = {
   updateLink: (id: string, draft: QuickLinkDraft) => void;
   deleteLink: (id: string) => void;
   deleteLinks: (ids: string[]) => void;
+  requestAssignment: (itemId: string, itemType: "project" | "task", itemName: string, toId: string) => void;
+  respondToAssignment: (requestId: string, status: "accepted" | "declined") => void;
   restoreItem: (type: keyof WorkspaceData["trash"], id: string) => void;
   permanentDeleteItem: (type: keyof WorkspaceData["trash"], id: string) => void;
   emptyTrash: () => void;
@@ -110,6 +113,8 @@ type Action =
   | { type: "upsert-link"; payload: QuickLink }
   | { type: "delete-link"; payload: string }
   | { type: "delete-links"; payload: string[] }
+  | { type: "send-assignment-request"; payload: AssignmentRequest }
+  | { type: "respond-to-assignment-request"; payload: { requestId: string; status: "accepted" | "declined" } }
   | { type: "restore-item"; payload: { type: keyof WorkspaceData["trash"]; id: string } }
   | {
       type: "permanent-delete";
@@ -362,6 +367,75 @@ function workspaceReducer(state: State, action: Action): State {
           settings: action.payload,
         },
       };
+    case "send-assignment-request": {
+      const isDuplicate = state.data.assignmentRequests?.some(
+        (r) =>
+          r.itemId === action.payload.itemId &&
+          r.toId === action.payload.toId &&
+          r.status === "pending"
+      );
+      if (isDuplicate) {
+        console.log("[WorkHub] Duplicate assignment request already pending — skipped.");
+        return state;
+      }
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          assignmentRequests: [
+            ...(state.data.assignmentRequests || []),
+            action.payload,
+          ],
+        },
+      };
+    }
+    case "respond-to-assignment-request": {
+      const { requestId, status } = action.payload;
+      const request = state.data.assignmentRequests?.find((r) => r.id === requestId);
+      if (!request) return state;
+
+      const updatedProjects =
+        status === "accepted" && request.itemType === "project"
+          ? (() => {
+              const exists = state.data.projects.some((p) => p.id === request.itemId);
+              if (!exists) {
+                console.warn(`[WorkHub] Project ${request.itemId} no longer exists for request ${requestId}`);
+                return state.data.projects;
+              }
+              return state.data.projects.map((p) =>
+                p.id === request.itemId
+                  ? { ...p, assigneeIds: [...new Set([...p.assigneeIds, request.toId])] }
+                  : p
+              );
+            })()
+          : state.data.projects;
+
+      const updatedTasks =
+        status === "accepted" && request.itemType === "task"
+          ? (() => {
+              const exists = state.data.tasks.some((t) => t.id === request.itemId);
+              if (!exists) {
+                console.warn(`[WorkHub] Task ${request.itemId} no longer exists for request ${requestId}`);
+                return state.data.tasks;
+              }
+              return state.data.tasks.map((t) =>
+                t.id === request.itemId
+                  ? { ...t, assigneeIds: [...new Set([...t.assigneeIds, request.toId])] }
+                  : t
+              );
+            })()
+          : state.data.tasks;
+
+      return {
+        ...state,
+        data: {
+          ...state.data,
+          projects: updatedProjects,
+          tasks: updatedTasks,
+          assignmentRequests: state.data.assignmentRequests?.filter((r) => r.id !== requestId),
+        },
+      };
+    }
     default:
       return state;
   }
@@ -615,9 +689,13 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
     let lastPrivateData: WorkspaceData | null = null;
 
     const mergeAndDispatch = () => {
-      if (!lastPublicData && !lastPrivateData) return;
-      
-      const base = lastPublicData || normalizeWorkspaceData({});
+      // Always wait for the public snapshot before merging. The public doc is the
+      // source of truth for assignmentRequests and workspace-wide data. If only the
+      // private snapshot has arrived, bail out — the public listener will fire shortly
+      // and trigger a proper merge then.
+      if (!lastPublicData) return;
+
+      const base = lastPublicData;
       const priv = lastPrivateData || normalizeWorkspaceData({});
       const current = stateDataRef.current;
 
@@ -652,6 +730,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         projects: dedupe(base.projects, priv.projects, current.projects, current.trash.projects),
         notes: dedupe(base.notes, priv.notes, current.notes, current.trash.notes),
         links: dedupe(base.links, priv.links, current.links, current.trash.links),
+        assignmentRequests: dedupe(base.assignmentRequests || [], priv.assignmentRequests || [], current.assignmentRequests || [], []),
       };
 
       const remoteHash = stableHash(mergedData);
@@ -705,34 +784,42 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
       setStorageError(null);
 
-      // Only push to Firestore if data changed locally (not from remote)
-      if (user && currentWorkspaceId && stableHash(state.data) !== remoteDataHash) {
-        setIsSyncing(true);
-        
-        const baseData = state.data;
-        
-        const publicData: WorkspaceData = {
-          ...baseData,
-          tasks: baseData.tasks.filter(t => t.visibility !== "private"),
-          projects: baseData.projects.filter(p => p.visibility !== "private"),
-          notes: baseData.notes.filter(n => n.visibility !== "private"),
-          links: baseData.links.filter(l => l.visibility !== "private"),
-        };
-
-        const privateData: WorkspaceData = {
-          ...baseData,
-          members: {}, // Skip member array in private
-          tasks: baseData.tasks.filter(t => t.visibility === "private"),
-          projects: baseData.projects.filter(p => p.visibility === "private"),
-          notes: baseData.notes.filter(n => n.visibility === "private"),
-          links: baseData.links.filter(l => l.visibility === "private"),
-        };
-
-        const publicProm = setDoc(doc(db, "workspaces", currentWorkspaceId), publicData, { merge: true });
-        const privateProm = setDoc(doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`), privateData, { merge: true });
-        
-        Promise.all([publicProm, privateProm]).finally(() => setIsSyncing(false));
-      }
+        // 1. CLOBBERING PROTECTION: Only push to Firestore if we have successfully synced from remote at least once.
+        // This prevents new members (with default data) from overwriting a workspace before their first snapshot arrives.
+        if (user && currentWorkspaceId && remoteDataHash !== null && stableHash(state.data) !== remoteDataHash) {
+          setIsSyncing(true);
+          
+          const baseData = state.data;
+          
+          const publicData: WorkspaceData = {
+            ...baseData,
+            tasks: baseData.tasks.filter(t => t.visibility !== "private"),
+            projects: baseData.projects.filter(p => p.visibility !== "private"),
+            notes: baseData.notes.filter(t => t.visibility !== "private"),
+            links: baseData.links.filter(l => l.visibility !== "private"),
+            // assignmentRequests is intentionally excluded here.
+            // Requests are written atomically via arrayUnion in requestAssignment()
+            // and removed directly via updateDoc in respondToAssignment().
+            // Including them in a full-doc setDoc would let any member's stale local
+            // state silently overwrite requests they haven't received yet from Firestore.
+            assignmentRequests: undefined,
+          };
+  
+          const privateData: WorkspaceData = {
+            ...baseData,
+            members: {}, // Skip member array in private
+            tasks: baseData.tasks.filter(t => t.visibility === "private"),
+            projects: baseData.projects.filter(p => p.visibility === "private"),
+            notes: baseData.notes.filter(n => n.visibility === "private"),
+            links: baseData.links.filter(l => l.visibility === "private"),
+            assignmentRequests: [], // Requests stay in public
+          };
+  
+          const publicProm = setDoc(doc(db, "workspaces", currentWorkspaceId), publicData, { merge: true });
+          const privateProm = setDoc(doc(db, "private_workspaces", `${currentWorkspaceId}_${user.uid}`), privateData, { merge: true });
+          
+          Promise.all([publicProm, privateProm]).finally(() => setIsSyncing(false));
+        }
     } catch {
       setStorageError(
         "Work Hub could not save your latest changes. Your current session still works, but changes may not persist.",
@@ -787,6 +874,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             ...draft,
             visibility,
             ownerId: ownerId || user?.uid,
+            assigneeIds: visibility === "private" ? [] : draft.assigneeIds,
             id: makeId(),
             completed: draft.completed ?? draft.status === "done",
             createdAt: timestamp,
@@ -807,6 +895,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             ...draft,
             id,
             ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
+            assigneeIds: draft.visibility === "private" ? [] : draft.assigneeIds || current.assigneeIds || [],
             completed: draft.completed ?? draft.status === "done",
             updatedAt: new Date().toISOString(),
           },
@@ -829,6 +918,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           payload: {
             ...draft,
             id: newId,
+            assigneeIds: draft.visibility === "private" ? [] : draft.assigneeIds,
             ownerId: user?.uid,
             createdAt: timestamp,
             updatedAt: timestamp,
@@ -851,6 +941,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             ...draft,
             id,
             ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
+            assigneeIds: draft.visibility === "private" ? [] : draft.assigneeIds || current.assigneeIds || [],
             updatedAt: new Date().toISOString(),
           },
         });
@@ -877,6 +968,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             ...draft,
             id: makeId(),
             ownerId: user?.uid,
+            assigneeIds: draft.visibility === "private" ? [] : draft.assigneeIds,
             createdAt: timestamp,
             updatedAt: timestamp,
           },
@@ -898,6 +990,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             ...draft,
             id,
             ownerId: draft.visibility === "private" && user ? user.uid : current.ownerId,
+            assigneeIds: draft.visibility === "private" ? [] : draft.assigneeIds || current.assigneeIds || [],
             updatedAt: new Date().toISOString(),
           },
         });
@@ -970,6 +1063,60 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "permanent-delete", payload: { type, id } });
       },
       emptyTrash: () => dispatch({ type: "empty-trash" }),
+      requestAssignment: (itemId: string, itemType: "project" | "task", itemName: string, toId: string) => {
+        if (!user || !currentWorkspaceId) return;
+
+        // Prevent duplicate pending requests before dispatching
+        const alreadyPending = stateDataRef.current.assignmentRequests?.some(
+          (r) => r.itemId === itemId && r.toId === toId && r.status === "pending"
+        );
+        if (alreadyPending) return;
+
+        const newRequest: AssignmentRequest = {
+          id: makeId(),
+          itemId,
+          itemType,
+          itemName,
+          fromId: user.uid,
+          fromName: user.displayName || user.email || "Unknown User",
+          toId,
+          status: "pending",
+          timestamp: new Date().toISOString(),
+        };
+
+        // 1. Update local state immediately (optimistic)
+        dispatch({ type: "send-assignment-request", payload: newRequest });
+
+        // 2. Write directly to Firestore using arrayUnion — atomic append that
+        //    cannot be clobbered by any other member's concurrent full-doc write.
+        const wsRef = doc(db, "workspaces", currentWorkspaceId);
+        updateDoc(wsRef, {
+          assignmentRequests: arrayUnion(newRequest),
+        }).catch((err) =>
+          console.error("[WorkHub] Failed to write assignment request:", err)
+        );
+      },
+      respondToAssignment: (requestId: string, status: "accepted" | "declined") => {
+        if (!currentWorkspaceId) return;
+
+        // 1. Update local state immediately (optimistic)
+        dispatch({
+          type: "respond-to-assignment-request",
+          payload: { requestId, status },
+        });
+
+        // 2. Compute the updated requests array and write directly to Firestore,
+        //    bypassing the persist useEffect which could race with other members.
+        const updatedRequests = (stateDataRef.current.assignmentRequests || []).filter(
+          (r) => r.id !== requestId
+        );
+        const wsRef = doc(db, "workspaces", currentWorkspaceId);
+        updateDoc(wsRef, {
+          assignmentRequests: updatedRequests,
+        }).catch((err) =>
+          console.error("[WorkHub] Failed to update assignment requests:", err)
+        );
+      },
       undoLastDeletion: () => {
         if (lastDeletedItem) {
           dispatch({ type: "restore-item", payload: lastDeletedItem });

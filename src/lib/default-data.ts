@@ -185,6 +185,7 @@ export const defaultWorkspaceData: WorkspaceData = {
     notes: [],
     links: [],
   },
+  assignmentRequests: [],
 };
 
 export function normalizeWorkspaceData(value: unknown): WorkspaceData {
@@ -228,6 +229,9 @@ export function normalizeWorkspaceData(value: unknown): WorkspaceData {
       notes: Array.isArray(candidate.trash?.notes) ? candidate.trash!.notes : [],
       links: Array.isArray(candidate.trash?.links) ? candidate.trash!.links : [],
     },
+    assignmentRequests: Array.isArray(candidate.assignmentRequests)
+      ? candidate.assignmentRequests
+      : [],
     settings: {
       ...defaultWorkspaceData.settings,
       ...(candidate.settings ?? {}),
