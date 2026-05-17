@@ -28,6 +28,8 @@ import type { Task } from "@/lib/types";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, isOverdue, safeLower, sortByUpdatedAt } from "@/lib/utils";
 
+import { DetailDialog } from "@/components/workspace/detail-dialog";
+
 export default function TasksPage() {
   const {
     data,
@@ -45,9 +47,10 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
 
   const viewableTasks = data.tasks.filter(
-    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+    (t) => t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
   );
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
@@ -179,10 +182,23 @@ export default function TasksPage() {
             const project = data.projects.find((item) => item.id === task.projectId);
 
             return (
-              <Surface key={task.id} className="p-5">
+              <Surface
+                key={task.id}
+                className="p-5 cursor-pointer hover:border-[var(--brand)] transition-colors duration-200"
+                onClick={(e) => {
+                  if (
+                    (e.target as HTMLElement).closest("button") ||
+                    (e.target as HTMLElement).closest("input[type='checkbox']") ||
+                    (e.target as HTMLElement).closest("a")
+                  ) {
+                    return;
+                  }
+                  setSelectedDetailId(task.id);
+                }}
+              >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex flex-1 gap-4">
-                    <div className="flex flex-col items-center gap-3 mt-1">
+                    <div className="flex flex-col items-center gap-3 mt-1" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(task.id)}
                         onChange={() => toggleSelection(task.id)}
@@ -244,14 +260,16 @@ export default function TasksPage() {
                     </div>
                   </div>
 
-                  <EntityActions
-                    onEdit={() => setEditingTask(task)}
-                    onDelete={() => {
-                      setSelectedIds(new Set([task.id]));
-                      setIsBulkDeleteOpen(true);
-                    }}
-                    canEdit={task.ownerId === user?.uid}
-                  />
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <EntityActions
+                      onEdit={() => setEditingTask(task)}
+                      onDelete={() => {
+                        setSelectedIds(new Set([task.id]));
+                        setIsBulkDeleteOpen(true);
+                      }}
+                      canEdit={task.ownerId === user?.uid}
+                    />
+                  </div>
                 </div>
               </Surface>
             );
@@ -322,6 +340,13 @@ export default function TasksPage() {
           setSelectedIds(new Set());
           setIsBulkDeleteOpen(false);
         }}
+      />
+
+      <DetailDialog
+        open={Boolean(selectedDetailId)}
+        onClose={() => setSelectedDetailId(null)}
+        itemType="task"
+        itemId={selectedDetailId}
       />
     </div>
   );

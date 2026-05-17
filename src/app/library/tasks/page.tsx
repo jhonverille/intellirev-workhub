@@ -48,7 +48,7 @@ export default function TasksPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const viewableTasks = data.tasks.filter(
-    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+    (t) => t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
   );
 
   const query = safeLower(`${searchQuery || ""} ${localSearch}`.trim());

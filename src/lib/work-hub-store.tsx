@@ -733,13 +733,23 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         return Array.from(map.values());
       };
 
+      // For assignment requests, remote (Firestore) is always authoritative.
+      // We only keep local items that haven't echoed back from the server yet
+      // (i.e. optimistic additions that Firestore hasn't confirmed yet).
+      // This prevents stale local state from hiding cross-account requests.
+      const mergeRequests = (remote: AssignmentRequest[], local: AssignmentRequest[]) => {
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const localOnlyNew = local.filter((l) => !remoteIds.has(l.id));
+        return [...remote, ...localOnlyNew];
+      };
+
       const mergedData: WorkspaceData = {
         ...base,
         tasks: dedupe(base.tasks, priv.tasks, current.tasks, current.trash.tasks),
         projects: dedupe(base.projects, priv.projects, current.projects, current.trash.projects),
         notes: dedupe(base.notes, priv.notes, current.notes, current.trash.notes),
         links: dedupe(base.links, priv.links, current.links, current.trash.links),
-        assignmentRequests: dedupe(base.assignmentRequests || [], priv.assignmentRequests || [], current.assignmentRequests || [], []),
+        assignmentRequests: mergeRequests(base.assignmentRequests || [], current.assignmentRequests || []),
       };
 
       const remoteHash = stableHash(mergedData);
@@ -800,30 +810,42 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
         // 1. CLOBBERING PROTECTION: Only push to Firestore if we have successfully synced from remote at least once.
         // This prevents new members (with default data) from overwriting a workspace before their first snapshot arrives.
         if (user && currentWorkspaceId && remoteDataHash !== null && stableHash(state.data) !== remoteDataHash) {
-          setIsSyncing(true);
+          setTimeout(() => setIsSyncing(true), 0);
           
           const baseData = state.data;
           
           const publicData: WorkspaceData = {
             ...baseData,
-            tasks: baseData.tasks.filter(t => t.visibility !== "private"),
-            projects: baseData.projects.filter(p => p.visibility !== "private"),
-            notes: baseData.notes.filter(t => t.visibility !== "private"),
+            tasks: baseData.tasks.filter(t =>
+              t.visibility !== "private" || (t.assigneeIds && t.assigneeIds.length > 0)
+            ),
+            projects: baseData.projects.filter(p =>
+              p.visibility !== "private" || (p.assigneeIds && p.assigneeIds.length > 0)
+            ),
+            // A note is included in the public doc if it is public OR if it has been
+            // explicitly shared with specific members (private-but-shared). The public
+            // doc is readable by all workspace members; the client-side filter on the
+            // notes page uses `assigneeIds` to control who actually sees private notes.
+            notes: baseData.notes.filter(n =>
+              n.visibility !== "private" || (n.assigneeIds && n.assigneeIds.length > 0)
+            ),
             links: baseData.links.filter(l => l.visibility !== "private"),
-            // assignmentRequests is intentionally excluded here.
-            // Requests are written atomically via arrayUnion in requestAssignment()
-            // and removed directly via updateDoc in respondToAssignment().
-            // Including them in a full-doc setDoc would let any member's stale local
-            // state silently overwrite requests they haven't received yet from Firestore.
-            assignmentRequests: undefined,
           };
+          // assignmentRequests is intentionally excluded here.
+          // Requests are written atomically via arrayUnion in requestAssignment()
+          // and removed directly via updateDoc in respondToAssignment().
+          // Including them in a full-doc setDoc would let any member's stale local
+          // state silently overwrite requests they haven't received yet from Firestore.
+          delete (publicData as any).assignmentRequests;
   
           const privateData: WorkspaceData = {
             ...baseData,
             members: {}, // Skip member array in private
-            tasks: baseData.tasks.filter(t => t.visibility === "private"),
-            projects: baseData.projects.filter(p => p.visibility === "private"),
-            notes: baseData.notes.filter(n => n.visibility === "private"),
+            tasks: baseData.tasks.filter(t => t.visibility === "private" && (!t.assigneeIds || t.assigneeIds.length === 0)),
+            projects: baseData.projects.filter(p => p.visibility === "private" && (!p.assigneeIds || p.assigneeIds.length === 0)),
+            // Only truly private (unshared) notes go in the private doc.
+            // Private notes with assigneeIds are in the public doc (see above).
+            notes: baseData.notes.filter(n => n.visibility === "private" && (!n.assigneeIds || n.assigneeIds.length === 0)),
             links: baseData.links.filter(l => l.visibility === "private"),
             assignmentRequests: [], // Requests stay in public
           };
@@ -1113,18 +1135,67 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
       respondToAssignment: (requestId: string, status: "accepted" | "declined") => {
         if (!currentWorkspaceId) return;
 
+        // Find the request before dispatching so we can use it for the Firestore write
+        const request = stateDataRef.current.assignmentRequests?.find((r) => r.id === requestId);
+        if (!request) return;
+
         // 1. Update local state immediately (optimistic)
         dispatch({
           type: "respond-to-assignment-request",
           payload: { requestId, status },
         });
 
-        // 2. Compute the updated requests array and write directly to Firestore,
-        //    bypassing the persist useEffect which could race with other members.
+        // 2. Remove the request from Firestore atomically
         const updatedRequests = (stateDataRef.current.assignmentRequests || []).filter(
           (r) => r.id !== requestId
         );
         const wsRef = doc(db, "workspaces", currentWorkspaceId);
+
+        // 3. If accepted, also write the updated assigneeIds for the project/task
+        //    directly to Firestore. The reducer updates local state, but the persist
+        //    effect may not fire (remoteDataHash races with the request removal write),
+        //    so we must write the assignee change explicitly here.
+        if (status === "accepted") {
+          if (request.itemType === "project") {
+            const project = stateDataRef.current.projects.find((p) => p.id === request.itemId);
+            if (project) {
+              const updatedProject = {
+                ...project,
+                assigneeIds: [...new Set([...(project.assigneeIds || []), request.toId])],
+              };
+              const updatedProjects = stateDataRef.current.projects.map((p) =>
+                p.id === request.itemId ? updatedProject : p
+              );
+              updateDoc(wsRef, {
+                assignmentRequests: updatedRequests,
+                projects: updatedProjects,
+              }).catch((err) =>
+                console.error("[WorkHub] Failed to accept project assignment:", err)
+              );
+              return;
+            }
+          } else if (request.itemType === "task") {
+            const task = stateDataRef.current.tasks.find((t) => t.id === request.itemId);
+            if (task) {
+              const updatedTask = {
+                ...task,
+                assigneeIds: [...new Set([...(task.assigneeIds || []), request.toId])],
+              };
+              const updatedTasks = stateDataRef.current.tasks.map((t) =>
+                t.id === request.itemId ? updatedTask : t
+              );
+              updateDoc(wsRef, {
+                assignmentRequests: updatedRequests,
+                tasks: updatedTasks,
+              }).catch((err) =>
+                console.error("[WorkHub] Failed to accept task assignment:", err)
+              );
+              return;
+            }
+          }
+        }
+
+        // Fallback (declined, or item not found): just remove the request
         updateDoc(wsRef, {
           assignmentRequests: updatedRequests,
         }).catch((err) =>

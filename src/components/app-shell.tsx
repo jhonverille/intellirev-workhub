@@ -83,17 +83,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : null}
             
             <div className="mx-auto w-full max-w-[1240px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={pathname}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.24, ease: [0.24, 0.24, 0, 1] }}
-                >
-                  {children}
-                </motion.div>
-              </AnimatePresence>
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+              >
+                {children}
+              </motion.div>
             </div>
           </main>
         </div>

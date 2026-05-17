@@ -29,10 +29,10 @@ export default function DashboardPage() {
   );
 
   const viewableProjects = data.projects.filter(
-    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
+    (p) => p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
   );
   const viewableTasks = data.tasks.filter(
-    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+    (t) => t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
   );
   const viewableNotes = data.notes.filter(
     (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")

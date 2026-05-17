@@ -28,6 +28,8 @@ import type { Project } from "@/lib/types";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower } from "@/lib/utils";
 
+import { DetailDialog } from "@/components/workspace/detail-dialog";
+
 export default function ProjectsPage() {
   const { data, user, searchQuery, createProject, updateProject, deleteProjects } =
     useWorkHub();
@@ -37,9 +39,10 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
 
   const viewableProjects = data.projects.filter(
-    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
+    (p) => p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
   );
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const projects = viewableProjects.filter((project) => {
@@ -155,10 +158,23 @@ export default function ProjectsPage() {
             const relatedTasks = data.tasks.filter((task) => task.projectId === project.id);
 
             return (
-              <Surface key={project.id} className="p-5">
+              <Surface
+                key={project.id}
+                className="p-5 cursor-pointer hover:border-[var(--brand)] transition-colors duration-200"
+                onClick={(e) => {
+                  if (
+                    (e.target as HTMLElement).closest("button") ||
+                    (e.target as HTMLElement).closest("input[type='checkbox']") ||
+                    (e.target as HTMLElement).closest("a")
+                  ) {
+                    return;
+                  }
+                  setSelectedDetailId(project.id);
+                }}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex gap-4">
-                    <div className="pt-1">
+                    <div className="pt-1" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(project.id)}
                         onChange={() => toggleSelection(project.id)}
@@ -184,14 +200,16 @@ export default function ProjectsPage() {
                       </p>
                     </div>
                   </div>
-                  <EntityActions
-                    onEdit={() => setEditingProject(project)}
-                    onDelete={() => {
-                      setSelectedIds(new Set([project.id]));
-                      setIsBulkDeleteOpen(true);
-                    }}
-                    canEdit={project.ownerId === user?.uid}
-                  />
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <EntityActions
+                      onEdit={() => setEditingProject(project)}
+                      onDelete={() => {
+                        setSelectedIds(new Set([project.id]));
+                        setIsBulkDeleteOpen(true);
+                      }}
+                      canEdit={project.ownerId === user?.uid}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[var(--muted)]">
@@ -281,6 +299,13 @@ export default function ProjectsPage() {
           setSelectedIds(new Set());
           setIsBulkDeleteOpen(false);
         }}
+      />
+
+      <DetailDialog
+        open={Boolean(selectedDetailId)}
+        onClose={() => setSelectedDetailId(null)}
+        itemType="project"
+        itemId={selectedDetailId}
       />
     </div>
   );

@@ -39,7 +39,7 @@ export default function ProjectsPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const viewableProjects = data.projects.filter(
-    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
+    (p) => p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
   );
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const projects = viewableProjects.filter((project) => {

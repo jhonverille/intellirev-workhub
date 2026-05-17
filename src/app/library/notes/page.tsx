@@ -35,7 +35,7 @@ export default function NotesPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const viewableNotes = data.notes.filter(
-    (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
+    (n) => n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
   );
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
