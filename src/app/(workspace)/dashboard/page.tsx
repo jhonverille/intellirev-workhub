@@ -19,6 +19,7 @@ import { Surface } from "@/components/ui/surface";
 import { ActivityFeed } from "@/components/workspace/activity-feed";
 import { projectStatuses } from "@/lib/navigation";
 import { getProjectStatusTone, getTaskStatusTone } from "@/lib/presentation";
+import { filterViewable } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, formatRelativeDate, sortByUpdatedAt } from "@/lib/utils";
 
@@ -28,15 +29,9 @@ export default function DashboardPage() {
     (r) => r.toId === user?.uid && r.status === "pending"
   );
 
-  const viewableProjects = data.projects.filter(
-    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
-  );
-  const viewableTasks = data.tasks.filter(
-    (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
-  );
-  const viewableNotes = data.notes.filter(
-    (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
-  );
+  const viewableProjects = filterViewable(data.projects, user?.uid);
+  const viewableTasks = filterViewable(data.tasks, user?.uid);
+  const viewableNotes = filterViewable(data.notes, user?.uid);
   const activeProjects = viewableProjects.filter((project) => project.status === "active");
   const focusTasks = [...viewableTasks]
     .filter((task) => !task.completed)

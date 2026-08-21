@@ -21,6 +21,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { Surface } from "@/components/ui/surface";
 import { Markdown } from "@/components/ui/markdown";
 import type { Note } from "@/lib/types";
+import { filterViewable } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower, sortByUpdatedAt } from "@/lib/utils";
 import { AttributionRow } from "@/components/workspace/attribution-row";
@@ -35,9 +36,7 @@ export default function NotesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  const viewableNotes = data.notes.filter(
-    (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
-  );
+  const viewableNotes = filterViewable(data.notes, user?.uid);
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const notes = sortByUpdatedAt(viewableNotes).filter((note) => {

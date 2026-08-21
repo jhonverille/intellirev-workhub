@@ -25,6 +25,7 @@ import { Surface } from "@/components/ui/surface";
 import { AttributionRow } from "@/components/workspace/attribution-row";
 import { getProjectStatusTone } from "@/lib/presentation";
 import type { Project } from "@/lib/types";
+import { filterViewable } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower } from "@/lib/utils";
 
@@ -39,9 +40,7 @@ export default function ProjectsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  const viewableProjects = data.projects.filter(
-    (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
-  );
+  const viewableProjects = filterViewable(data.projects, user?.uid);
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const projects = viewableProjects.filter((project) => {
     const matchesQuery = query
