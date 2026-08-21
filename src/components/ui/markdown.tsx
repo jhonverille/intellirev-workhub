@@ -11,7 +11,7 @@ type MarkdownProps = {
 
 export function Markdown({ content, className }: MarkdownProps) {
   return (
-    <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
+    <div className={cn("markdown", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );
