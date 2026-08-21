@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { STORAGE_KEY, defaultWorkspaceData } from "@/lib/default-data";
 import { useWorkHub } from "@/lib/work-hub-store";
-import { renderWithProvider } from "@/test/test-utils";
+import { renderWithProvider, signInWithWorkspace } from "@/test/test-utils";
 
 function StoreHarness() {
   const { createTask, data, initialized } = useWorkHub();
@@ -36,13 +36,13 @@ function StoreHarness() {
 
 describe("WorkHubProvider", () => {
   it("loads persisted state and saves new changes back to localStorage", async () => {
+    // Persisted state wins over the in-memory demo seed, so start both the
+    // local cache and the remote workspace empty to isolate the write path.
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({
-        ...defaultWorkspaceData,
-        tasks: [],
-      }),
+      JSON.stringify({ ...defaultWorkspaceData, tasks: [] }),
     );
+    signInWithWorkspace({ tasks: [] });
 
     const user = userEvent.setup();
     renderWithProvider(<StoreHarness />);

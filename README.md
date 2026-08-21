@@ -52,8 +52,36 @@ src/
     presentation.ts     Shared badge/status presentation helpers
     types.ts            TypeScript domain models
     utils.ts            Formatting and small helpers
+    visibility.ts       Who may see a private item (one definition)
+    workspace-items.ts  Item-document storage shape, merge and diff
     work-hub-store.tsx  Client-side store, Firestore sync, and auth
 ```
+
+## Data model
+
+Firestore holds three things per workspace:
+
+- `workspaces/{id}` — name, members, pending assignment requests, and
+  `schemaVersion`. Only the owner may change membership or the schema flag.
+- `workspaces/{id}/items/{itemId}` — shared tasks, projects, notes, and links,
+  one document each, tagged with `kind` and a `deleted` flag for the recycle bin.
+  One document per item means two members editing different items never write the
+  same document.
+- `private_workspaces/{id}_{uid}` — that member's private items and their
+  personal settings (theme, profile, list preferences).
+
+Workspaces written by older builds kept all content in arrays on the workspace
+document. They are read as-is until the owner next opens them, at which point the
+content is copied into item documents and `schemaVersion` is set to 2.
+
+Security rules are enforced server-side and are the only access control in the
+app, since the client is a static export. After changing `firestore.rules`:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+
 
 ## Deployment
 

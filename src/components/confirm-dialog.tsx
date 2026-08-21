@@ -6,6 +6,8 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel?: string;
+  /** Overrides the default delete wording for non-delete confirmations. */
+  body?: string;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -15,6 +17,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Delete",
+  body = "This action removes the item from your workspace and cannot be undone.",
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -35,9 +38,7 @@ export function ConfirmDialog({
         </div>
       }
     >
-      <p className="text-sm leading-6 text-[var(--muted)]">
-        This action removes the item from your workspace and cannot be undone.
-      </p>
+      <p className="text-sm leading-6 text-[var(--muted)]">{body}</p>
     </Dialog>
   );
 }

@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Surface } from "@/components/ui/surface";
+import { canView, type VisibilityScoped } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate } from "@/lib/utils";
 import { WorkspaceData } from "@/lib/types";
@@ -23,8 +24,7 @@ export default function TrashPage() {
   const { data, user, restoreItem, permanentDeleteItem, emptyTrash } = useWorkHub();
   const [filter, setFilter] = useState<TrashType | "all">("all");
 
-  const isVisible = (item: { visibility?: string; ownerId?: string; assigneeIds?: string[] }) =>
-    item.visibility !== "private" || item.ownerId === user?.uid || item.assigneeIds?.includes(user?.uid ?? "");
+  const isVisible = (item: VisibilityScoped) => canView(item, user?.uid);
 
   const trashItems = [
     ...data.trash.tasks.filter(isVisible).map((item) => ({ ...item, type: "tasks" as TrashType })),

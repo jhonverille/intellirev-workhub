@@ -208,6 +208,7 @@ export function normalizeWorkspaceData(value: unknown): WorkspaceData {
   const candidate = value as Partial<WorkspaceData>;
   return {
     id: candidate.id,
+    schemaVersion: candidate.schemaVersion,
     name: candidate.name,
     ownerId: candidate.ownerId,
     members: candidate.members,

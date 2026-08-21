@@ -87,6 +87,8 @@ export type Member = {
   photoURL: string | null;
   role: Role;
   joinedAt: string;
+  /** Invite that admitted this member. firestore.rules verifies it on join. */
+  inviteId?: string;
 };
 
 export type Workspace = {
@@ -109,6 +111,11 @@ export type UserDoc = {
 
 export type WorkspaceData = {
   id?: string;
+  /**
+   * Storage layout of the workspace document. Absent or 1 means content is
+   * held in the arrays below; 2 means it lives in the `items` subcollection.
+   */
+  schemaVersion?: number;
   name?: string;
   ownerId?: string;
   members?: Record<string, Member>;

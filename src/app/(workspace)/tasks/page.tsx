@@ -25,6 +25,7 @@ import { Surface } from "@/components/ui/surface";
 import { AttributionRow } from "@/components/workspace/attribution-row";
 import { getTaskPriorityTone, getTaskStatusTone } from "@/lib/presentation";
 import type { Task } from "@/lib/types";
+import { filterMineOrAssigned } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, isOverdue, safeLower, sortByUpdatedAt } from "@/lib/utils";
 
@@ -49,9 +50,7 @@ export default function TasksPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
 
-  const viewableTasks = data.tasks.filter(
-    (t) => t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
-  );
+  const viewableTasks = filterMineOrAssigned(data.tasks, user?.uid);
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const tasks = sortByUpdatedAt(viewableTasks).filter((task) => {

@@ -1,6 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import {
+  createAuthMock,
+  createFirestoreMock,
+  resetAuth,
+  resetFirestore,
+} from "@/test/fakes/firebase-fake";
+
+// The store talks to Firebase on mount. Swap the SDK for in-memory doubles so
+// tests control auth state and snapshot ordering instead of racing the real
+// listeners (which fire `null` in jsdom and make the store wipe local state).
+vi.mock("firebase/auth", () => createAuthMock());
+vi.mock("firebase/firestore", () => createFirestoreMock());
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -28,6 +40,8 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  resetAuth();
+  resetFirestore();
   window.localStorage.clear();
   document.documentElement.classList.remove("dark");
   vi.restoreAllMocks();
