@@ -26,6 +26,7 @@ export function ProjectForm({
 }: ProjectFormProps) {
   const { 
     requestAssignment, 
+    user,
     data: { assignmentRequests = [] } 
   } = useWorkHub();
   const id = initialValue?.id;
@@ -38,7 +39,7 @@ export function ProjectForm({
     toDateInputValue(initialValue?.deadline ?? null),
   );
   const [assigneeIds, setAssigneeIds] = useState<string[]>(initialValue?.assigneeIds ?? []);
-  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
+  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "private");
   const [error, setError] = useState("");
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -132,14 +133,13 @@ export function ProjectForm({
         </Field>
       </div>
 
-      {visibility === "public" && (
-        <Field label="Assignees" hint="Select team members to assign to this project.">
+      <Field label="Assignees" hint="Select team members to assign to this project.">
           {() => (
             <div className="grid gap-2 sm:grid-cols-2 mt-2">
-              {members.length === 0 && (
-                <p className="text-sm text-[var(--muted)] col-span-2">No members in workspace.</p>
+              {members.filter((m) => m.uid !== user?.uid).length === 0 && (
+                <p className="text-sm text-[var(--muted)] col-span-2">No other team members to assign.</p>
               )}
-              {members.map((member) => {
+              {members.filter((m) => m.uid !== user?.uid).map((member) => {
                 const isAssigned = assigneeIds.includes(member.uid);
                 const pendingRequest = assignmentRequests.find(
                   (r) => r.toId === member.uid && r.itemId === id && r.status === "pending"
@@ -172,7 +172,6 @@ export function ProjectForm({
             </div>
           )}
         </Field>
-      )}
 
       <div className="flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>

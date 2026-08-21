@@ -21,12 +21,9 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { Surface } from "@/components/ui/surface";
 import { Markdown } from "@/components/ui/markdown";
 import type { Note } from "@/lib/types";
-import { filterMineOrAssigned } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, safeLower, sortByUpdatedAt } from "@/lib/utils";
 import { AttributionRow } from "@/components/workspace/attribution-row";
-
-import { DetailDialog } from "@/components/workspace/detail-dialog";
 
 export default function NotesPage() {
   const { data, user, searchQuery, createNote, updateNote, deleteNotes } = useWorkHub();
@@ -36,9 +33,10 @@ export default function NotesPage() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
-  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
 
-  const viewableNotes = filterMineOrAssigned(data.notes, user?.uid);
+  const viewableNotes = data.notes.filter(
+    (n) => n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
+  );
 
   const query = safeLower(`${searchQuery} ${localSearch}`.trim());
   const notes = sortByUpdatedAt(viewableNotes).filter((note) => {
@@ -117,23 +115,10 @@ export default function NotesPage() {
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {notes.map((note) => (
-            <Surface
-              key={note.id}
-              className="p-5 cursor-pointer hover:border-[var(--brand)] transition-colors duration-200"
-              onClick={(e) => {
-                if (
-                  (e.target as HTMLElement).closest("button") ||
-                  (e.target as HTMLElement).closest("input[type='checkbox']") ||
-                  (e.target as HTMLElement).closest("a")
-                ) {
-                  return;
-                }
-                setSelectedDetailId(note.id);
-              }}
-            >
+            <Surface key={note.id} className="p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex gap-4">
-                  <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="pt-1">
                     <Checkbox
                       checked={selectedIds.has(note.id)}
                       onChange={() => toggleSelection(note.id)}
@@ -142,47 +127,45 @@ export default function NotesPage() {
                   <div className="space-y-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h2 className="text-lg font-semibold text-[var(--foreground)]">
-                          {note.title}
-                        </h2>
-                        {note.visibility === "private" && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
-                            <LockIcon className="h-3 w-3" />
-                            Private
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-sm text-[var(--muted)]">
-                        Updated {formatDate(note.updatedAt)}
-                      </p>
-                    </div>
-                    <Markdown 
-                      content={note.content} 
-                      className="text-sm leading-7 text-[var(--muted)]" 
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      {note.tags.length ? (
-                        note.tags.map((tag) => (
-                          <Badge key={tag} tone="accent">
-                            {tag}
-                          </Badge>
-                        ))
-                      ) : (
-                        <Badge tone="neutral">No tags</Badge>
+                      <h2 className="text-lg font-semibold text-[var(--foreground)]">
+                        {note.title}
+                      </h2>
+                      {note.visibility === "private" && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
+                          <LockIcon className="h-3 w-3" />
+                          Private
+                        </span>
                       )}
                     </div>
-
-                    <AttributionRow
-                      ownerId={note.ownerId}
-                      assigneeIds={note.assigneeIds}
-                      createdAt={note.createdAt}
-                      isPrivate={note.visibility === "private"}
-                      members={data.members || {}}
-                    />
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      Updated {formatDate(note.updatedAt)}
+                    </p>
                   </div>
+                  <Markdown 
+                    content={note.content} 
+                    className="text-sm leading-7 text-[var(--muted)]" 
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {note.tags.length ? (
+                      note.tags.map((tag) => (
+                        <Badge key={tag} tone="accent">
+                          {tag}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge tone="neutral">No tags</Badge>
+                    )}
+                  </div>
+
+                  <AttributionRow
+                    ownerId={note.ownerId}
+                    assigneeIds={note.assigneeIds}
+                    createdAt={note.createdAt}
+                    isPrivate={note.visibility === "private"}
+                    members={data.members || {}}
+                  />
                 </div>
 
-                <div onClick={(e) => e.stopPropagation()}>
                   <EntityActions
                     onEdit={() => setEditingNote(note)}
                     onDelete={() => {
@@ -261,13 +244,6 @@ export default function NotesPage() {
           setSelectedIds(new Set());
           setIsBulkDeleteOpen(false);
         }}
-      />
-
-      <DetailDialog
-        open={Boolean(selectedDetailId)}
-        onClose={() => setSelectedDetailId(null)}
-        itemType="note"
-        itemId={selectedDetailId}
       />
     </div>
   );

@@ -3,6 +3,15 @@ export type TaskStatus = "to do" | "in progress" | "done" | "blocked";
 export type ProjectStatus = "planned" | "active" | "paused" | "completed";
 export type ThemePreference = "system" | "light" | "dark";
 
+export type ItemUpdate = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorPhotoURL: string | null;
+  content: string;
+  createdAt: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -17,6 +26,7 @@ export type Task = {
   ownerId?: string;
   createdAt: string;
   updatedAt: string;
+  updates?: ItemUpdate[]; // History of updates/comments
 };
 
 export type Project = {
@@ -30,6 +40,7 @@ export type Project = {
   ownerId?: string;
   createdAt: string;
   updatedAt: string;
+  updates?: ItemUpdate[]; // History of updates/comments
 };
 
 export type Note = {
@@ -42,6 +53,7 @@ export type Note = {
   ownerId?: string;
   createdAt: string;
   updatedAt: string;
+  updates?: ItemUpdate[]; // History of updates/comments
 };
 
 export type QuickLink = {

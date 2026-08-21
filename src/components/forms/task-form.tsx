@@ -22,6 +22,7 @@ type TaskFormProps = {
 export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }: TaskFormProps) {
   const { 
     requestAssignment, 
+    user,
     data: { assignmentRequests = [] } 
   } = useWorkHub();
   const id = initialValue?.id;
@@ -36,7 +37,7 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
   const [dueDate, setDueDate] = useState(toDateInputValue(initialValue?.dueDate ?? null));
   const [projectId, setProjectId] = useState(initialValue?.projectId ?? "");
   const [assigneeIds, setAssigneeIds] = useState<string[]>(initialValue?.assigneeIds ?? []);
-  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "public");
+  const [visibility, setVisibility] = useState<"public" | "private">(initialValue?.visibility ?? "private");
   const [error, setError] = useState("");
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -170,14 +171,13 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
         </Field>
       </div>
 
-      {visibility === "public" && (
-        <Field label="Assignees" hint="Select team members to assign to this task.">
+      <Field label="Assignees" hint="Select team members to assign to this task.">
           {() => (
             <div className="grid gap-2 sm:grid-cols-2 mt-2">
-              {members.length === 0 && (
-                <p className="text-sm text-[var(--muted)] col-span-2">No members in workspace.</p>
+              {members.filter((m) => m.uid !== user?.uid).length === 0 && (
+                <p className="text-sm text-[var(--muted)] col-span-2">No other team members to assign.</p>
               )}
-              {members.map((member) => {
+              {members.filter((m) => m.uid !== user?.uid).map((member) => {
                 const isAssigned = assigneeIds.includes(member.uid);
                 const pendingRequest = assignmentRequests.find(
                   (r) => r.toId === member.uid && r.itemId === id && r.status === "pending"
@@ -210,7 +210,6 @@ export function TaskForm({ initialValue, projects, members, onSubmit, onCancel }
             </div>
           )}
         </Field>
-      )}
 
       <div className="flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>

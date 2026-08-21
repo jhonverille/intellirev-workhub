@@ -19,7 +19,7 @@ import { Surface } from "@/components/ui/surface";
 import { ActivityFeed } from "@/components/workspace/activity-feed";
 import { projectStatuses } from "@/lib/navigation";
 import { getProjectStatusTone, getTaskStatusTone } from "@/lib/presentation";
-import { filterViewable } from "@/lib/visibility";
+import { filterMineOrAssigned, filterViewable } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, formatRelativeDate, sortByUpdatedAt } from "@/lib/utils";
 
@@ -29,8 +29,10 @@ export default function DashboardPage() {
     (r) => r.toId === user?.uid && r.status === "pending"
   );
 
-  const viewableProjects = filterViewable(data.projects, user?.uid);
-  const viewableTasks = filterViewable(data.tasks, user?.uid);
+  const viewableProjects = filterMineOrAssigned(data.projects, user?.uid);
+  const viewableTasks = filterMineOrAssigned(data.tasks, user?.uid);
+  // Notes on the dashboard deliberately keep the looser rule: anything not
+  // private, plus private notes shared with this member.
   const viewableNotes = filterViewable(data.notes, user?.uid);
   const activeProjects = viewableProjects.filter((project) => project.status === "active");
   const focusTasks = [...viewableTasks]

@@ -59,6 +59,31 @@ export function readStoredItems(workspaceId = TEST_WORKSPACE_ID) {
   return listDocs(itemsCollectionPath(workspaceId)) as Map<string, StoredItem>;
 }
 
+/**
+ * Real items always have an owner, and the pages filter on it ("mine or
+ * assigned to me"), so fixtures need one too. Explicit owners are left alone —
+ * tests use those to stand in for another member's items.
+ */
+function withOwner<T extends { ownerId?: string }>(items: T[], uid: string): T[] {
+  return items.map((item) => (item.ownerId ? item : { ...item, ownerId: uid }));
+}
+
+function ownItems(data: WorkspaceData, uid: string): WorkspaceData {
+  return {
+    ...data,
+    tasks: withOwner(data.tasks, uid),
+    projects: withOwner(data.projects, uid),
+    notes: withOwner(data.notes, uid),
+    links: withOwner(data.links, uid),
+    trash: {
+      tasks: withOwner(data.trash.tasks, uid),
+      projects: withOwner(data.trash.projects, uid),
+      notes: withOwner(data.trash.notes, uid),
+      links: withOwner(data.trash.links, uid),
+    },
+  };
+}
+
 function seedUserDoc(user: FakeUser, workspaceId: string) {
   seedDoc(`users/${user.uid}`, {
     uid: user.uid,
@@ -91,7 +116,7 @@ export function signInWithWorkspace(
   user: FakeUser = testUser,
   workspaceId = TEST_WORKSPACE_ID,
 ) {
-  const content: WorkspaceData = { ...defaultWorkspaceData, ...data };
+  const content: WorkspaceData = ownItems({ ...defaultWorkspaceData, ...data }, user.uid);
 
   seedUserDoc(user, workspaceId);
   seedDoc(workspaceDocPath(workspaceId), {
@@ -130,7 +155,7 @@ export function signInWithLegacyWorkspace(
   user: FakeUser = testUser,
   workspaceId = TEST_WORKSPACE_ID,
 ) {
-  const content: WorkspaceData = { ...defaultWorkspaceData, ...data };
+  const content: WorkspaceData = ownItems({ ...defaultWorkspaceData, ...data }, user.uid);
 
   seedUserDoc(user, workspaceId);
   seedDoc(workspaceDocPath(workspaceId), {

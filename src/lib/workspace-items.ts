@@ -50,8 +50,16 @@ const KIND_TO_ACTIVE_FIELD: Record<ItemKind, keyof Pick<WorkspaceData, "tasks" |
   link: "links",
 };
 
-function isPrivate(item: { visibility?: "public" | "private" }) {
-  return item.visibility === "private";
+/**
+ * Only an unshared private item belongs to its owner alone. A private item with
+ * assignees is "private but shared": it has to live in shared storage so those
+ * members can read it at all, and the page filters decide who actually sees it.
+ */
+export function isOwnerOnly(item: {
+  visibility?: "public" | "private";
+  assigneeIds?: string[];
+}) {
+  return item.visibility === "private" && (item.assigneeIds?.length ?? 0) === 0;
 }
 
 function store(kind: ItemKind, item: { id: string }, deleted: boolean): StoredItem {
@@ -59,15 +67,19 @@ function store(kind: ItemKind, item: { id: string }, deleted: boolean): StoredIt
 }
 
 /**
- * The shared items this client believes should exist, keyed by id. Private items
- * are excluded: they belong to the per-user document.
+ * The shared items this client believes should exist, keyed by id. Items private
+ * to their owner are excluded: those belong to the per-user document.
  */
 export function toStoredItems(data: WorkspaceData): Map<string, StoredItem> {
   const result = new Map<string, StoredItem>();
 
-  const add = (kind: ItemKind, items: Array<{ id: string; visibility?: "public" | "private" }>, deleted: boolean) => {
+  const add = (
+    kind: ItemKind,
+    items: Array<{ id: string; visibility?: "public" | "private"; assigneeIds?: string[] }>,
+    deleted: boolean,
+  ) => {
     for (const item of items) {
-      if (isPrivate(item)) continue;
+      if (isOwnerOnly(item)) continue;
       result.set(item.id, store(kind, item, deleted));
     }
   };

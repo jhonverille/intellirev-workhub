@@ -37,6 +37,7 @@ import {
   combineCollections,
   diffItems,
   fromStoredItems,
+  isOwnerOnly,
   ITEMS_COLLECTION,
   ITEMS_SCHEMA_VERSION,
   REQUESTS_COLLECTION,
@@ -330,17 +331,18 @@ function workspaceReducer(state: State, action: Action): State {
     }
     case "restore-item": {
       const { type, id } = action.payload;
-      const item = (state.data.trash[type] as any[]).find((i) => i.id === id);
+      const binned = state.data.trash[type] as (Task | Project | Note | QuickLink)[];
+      const item = binned.find((i) => i.id === id);
       if (!item) return state;
 
       return {
         ...state,
         data: {
           ...state.data,
-          [type]: [item, ...(state.data[type] as any[])],
+          [type]: [item, ...(state.data[type] as (Task | Project | Note | QuickLink)[])],
           trash: {
             ...state.data.trash,
-            [type]: (state.data.trash[type] as any[]).filter((i) => i.id !== id),
+            [type]: (state.data.trash[type] as (Task | Project | Note | QuickLink)[]).filter((i) => i.id !== id),
           },
         },
       };
@@ -353,7 +355,7 @@ function workspaceReducer(state: State, action: Action): State {
           ...state.data,
           trash: {
             ...state.data.trash,
-            [type]: (state.data.trash[type] as any[]).filter((i) => i.id !== id),
+            [type]: (state.data.trash[type] as (Task | Project | Note | QuickLink)[]).filter((i) => i.id !== id),
           },
         },
       };
@@ -473,7 +475,7 @@ function stableHash(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableHash).join(",")}]`;
   const sorted = Object.keys(value as object)
     .sort()
-    .map((k) => `${JSON.stringify(k)}:${stableHash((value as any)[k])}`);
+    .map((k) => `${JSON.stringify(k)}:${stableHash((value as Record<string, unknown>)[k])}`);
   return `{${sorted.join(",")}}`;
 }
 
@@ -676,10 +678,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
             createdAt: new Date().toISOString(),
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[WorkHub] User doc check/create error:", err);
         if (isMounted) {
-          setWorkspaceLoadError(err.message || "Failed to connect to user profile.");
+          setWorkspaceLoadError(
+            err instanceof Error ? err.message : "Failed to connect to user profile.",
+          );
           setInitialized(true);
           return;
         }
@@ -765,7 +769,7 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
   // 3. Workspace Sync (Remote -> Local)
   useEffect(() => {
     if (!user || !initialized || !currentWorkspaceId) {
-      if (initialized && !currentWorkspaceId) setIsSyncing(false);
+      if (initialized && !currentWorkspaceId) setIsSyncing((prev) => (prev ? false : prev));
       return;
     }
 
@@ -1058,16 +1062,23 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
 
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
-      setStorageError(null);
+      setStorageError((prev) => (prev === null ? prev : null));
 
       if (!user || !currentWorkspaceId) {
         return;
       }
 
-      const isPrivateItem = (item: { visibility?: "public" | "private" }) =>
-        item.visibility === "private";
-      const isSharedItem = (item: { visibility?: "public" | "private" }) =>
-        !isPrivateItem(item);
+      // An item is the owner's alone only while it has no assignees. A private
+      // item that has been shared with specific members must live in shared
+      // storage, or those members cannot read it at all.
+      const isPrivateItem = (item: {
+        visibility?: "public" | "private";
+        assigneeIds?: string[];
+      }) => isOwnerOnly(item);
+      const isSharedItem = (item: {
+        visibility?: "public" | "private";
+        assigneeIds?: string[];
+      }) => !isOwnerOnly(item);
 
       /**
        * This member's own items and preferences. Trash is filtered too: sending
@@ -1555,11 +1566,12 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           // Re-enable popup. Redirect often fails due to strict third-party cookie blocking in modern browsers.
           await signInWithPopup(auth, googleProvider);
           setIsAuthenticating(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const authFailure = error as { code?: string; message?: string };
           // Do NOT console.error here because Next.js 15 dev server intercepts it
           // and shows a huge error overlay, which interrupts the fallback redirect UX.
           
-          if (error.code === "auth/popup-blocked") {
+          if (authFailure.code === "auth/popup-blocked") {
             // Do NOT set an error string here. We want a silent fallback so the user 
             // just sees the loading spinner continue as they are seamlessly redirected.
             try {
@@ -1567,16 +1579,20 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
               const freshProvider = new GoogleAuthProvider();
               freshProvider.setCustomParameters({ prompt: "select_account" });
               await signInWithRedirect(auth, freshProvider);
-            } catch (redirectError: any) {
-              setAuthError(redirectError.message || "Redirect failed.");
+            } catch (redirectError: unknown) {
+              const failure = redirectError as { message?: string };
+              setAuthError(failure.message || "Redirect failed.");
               setIsAuthenticating(false);
             }
-          } else if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-by-user") {
+          } else if (
+            authFailure.code === "auth/popup-closed-by-user" ||
+            authFailure.code === "auth/cancelled-by-user"
+          ) {
             setAuthError("Sign-in cancelled or interrupted.");
             setIsAuthenticating(false);
           } else {
             console.error("Unhandled sign in error:", error);
-            setAuthError(error.message || "Sign in failed.");
+            setAuthError(authFailure.message || "Sign in failed.");
             setIsAuthenticating(false);
           }
         }
@@ -1592,7 +1608,8 @@ export function WorkHubProvider({ children }: { children: ReactNode }) {
           // Hard reload the browser to clear completely the Firebase auth internal iframe cache.
           // This prevents the "popup blocked on second attempt" bug caused by state retention.
           window.location.reload();
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const authFailure = error as { code?: string; message?: string };
           console.error("Sign out failed", error);
         }
       },

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  CalendarIcon,
   CheckSquareIcon,
   FolderIcon,
   LinkIcon,
@@ -13,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Surface } from "@/components/ui/surface";
-import { filterViewable } from "@/lib/visibility";
+import { canView, type VisibilityScoped } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate } from "@/lib/utils";
 import { WorkspaceData } from "@/lib/types";
@@ -25,11 +24,13 @@ export default function TrashPage() {
   const { data, user, restoreItem, permanentDeleteItem, emptyTrash } = useWorkHub();
   const [filter, setFilter] = useState<TrashType | "all">("all");
 
+  const isVisible = (item: VisibilityScoped) => canView(item, user?.uid);
+
   const trashItems = [
-    ...filterViewable(data.trash.tasks, user?.uid).map((item) => ({ ...item, type: "tasks" as TrashType })),
-    ...filterViewable(data.trash.projects, user?.uid).map((item) => ({ ...item, type: "projects" as TrashType })),
-    ...filterViewable(data.trash.notes, user?.uid).map((item) => ({ ...item, type: "notes" as TrashType })),
-    ...filterViewable(data.trash.links, user?.uid).map((item) => ({ ...item, type: "links" as TrashType })),
+    ...data.trash.tasks.filter(isVisible).map((item) => ({ ...item, type: "tasks" as TrashType })),
+    ...data.trash.projects.filter(isVisible).map((item) => ({ ...item, type: "projects" as TrashType })),
+    ...data.trash.notes.filter(isVisible).map((item) => ({ ...item, type: "notes" as TrashType })),
+    ...data.trash.links.filter(isVisible).map((item) => ({ ...item, type: "links" as TrashType })),
   ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const filteredItems = filter === "all" ? trashItems : trashItems.filter((i) => i.type === filter);

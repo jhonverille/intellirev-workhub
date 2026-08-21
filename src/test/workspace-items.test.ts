@@ -51,12 +51,28 @@ describe("toStoredItems", () => {
     expect(items.get("t2")).toMatchObject({ kind: "task", deleted: true });
   });
 
-  it("leaves private items out — they belong to the per-user document", () => {
+  it("leaves owner-only private items out — they belong to the per-user document", () => {
     const items = toStoredItems(
       workspace({ tasks: [task("t1"), task("secret", { visibility: "private" })] }),
     );
 
     expect([...items.keys()]).toEqual(["t1"]);
+  });
+
+  it("keeps a private item that has been shared, so its assignees can read it", () => {
+    // "Private but shared": the item is private, but specific members have been
+    // given it. Shared storage is the only place they can read it from, and the
+    // page filters decide who actually sees it.
+    const items = toStoredItems(
+      workspace({
+        tasks: [
+          task("shared-privately", { visibility: "private", assigneeIds: ["user-2"] }),
+          task("mine-alone", { visibility: "private", assigneeIds: [] }),
+        ],
+      }),
+    );
+
+    expect([...items.keys()]).toEqual(["shared-privately"]);
   });
 });
 

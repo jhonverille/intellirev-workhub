@@ -25,11 +25,8 @@ import { Surface } from "@/components/ui/surface";
 import { AttributionRow } from "@/components/workspace/attribution-row";
 import { getTaskPriorityTone, getTaskStatusTone } from "@/lib/presentation";
 import type { Task } from "@/lib/types";
-import { filterMineOrAssigned } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { formatDate, isOverdue, safeLower, sortByUpdatedAt } from "@/lib/utils";
-
-import { DetailDialog } from "@/components/workspace/detail-dialog";
 
 export default function TasksPage() {
   const {
@@ -41,6 +38,7 @@ export default function TasksPage() {
     deleteTasks,
     toggleTaskCompletion,
   } = useWorkHub();
+
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -48,11 +46,12 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
-  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
 
-  const viewableTasks = filterMineOrAssigned(data.tasks, user?.uid);
+  const viewableTasks = data.tasks.filter(
+    (t) => t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
+  );
 
-  const query = safeLower(`${searchQuery} ${localSearch}`.trim());
+  const query = safeLower(`${searchQuery || ""} ${localSearch}`.trim());
   const tasks = sortByUpdatedAt(viewableTasks).filter((task) => {
     const matchesQuery = query
       ? [task.title, task.description]
@@ -181,23 +180,10 @@ export default function TasksPage() {
             const project = data.projects.find((item) => item.id === task.projectId);
 
             return (
-              <Surface
-                key={task.id}
-                className="p-5 cursor-pointer hover:border-[var(--brand)] transition-colors duration-200"
-                onClick={(e) => {
-                  if (
-                    (e.target as HTMLElement).closest("button") ||
-                    (e.target as HTMLElement).closest("input[type='checkbox']") ||
-                    (e.target as HTMLElement).closest("a")
-                  ) {
-                    return;
-                  }
-                  setSelectedDetailId(task.id);
-                }}
-              >
+              <Surface key={task.id} className="p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex flex-1 gap-4">
-                    <div className="flex flex-col items-center gap-3 mt-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col items-center gap-3 mt-1">
                       <Checkbox
                         checked={selectedIds.has(task.id)}
                         onChange={() => toggleSelection(task.id)}
@@ -259,16 +245,14 @@ export default function TasksPage() {
                     </div>
                   </div>
 
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <EntityActions
-                      onEdit={() => setEditingTask(task)}
-                      onDelete={() => {
-                        setSelectedIds(new Set([task.id]));
-                        setIsBulkDeleteOpen(true);
-                      }}
-                      canEdit={task.ownerId === user?.uid}
-                    />
-                  </div>
+                  <EntityActions
+                    onEdit={() => setEditingTask(task)}
+                    onDelete={() => {
+                      setSelectedIds(new Set([task.id]));
+                      setIsBulkDeleteOpen(true);
+                    }}
+                    canEdit={task.ownerId === user?.uid}
+                  />
                 </div>
               </Surface>
             );
@@ -339,13 +323,6 @@ export default function TasksPage() {
           setSelectedIds(new Set());
           setIsBulkDeleteOpen(false);
         }}
-      />
-
-      <DetailDialog
-        open={Boolean(selectedDetailId)}
-        onClose={() => setSelectedDetailId(null)}
-        itemType="task"
-        itemId={selectedDetailId}
       />
     </div>
   );
