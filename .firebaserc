@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "work-hub-53aa2"
+  },
   "targets": {},
   "etags": {}
 }

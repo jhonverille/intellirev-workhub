@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { TopNav } from "@/components/top-nav";
 import { STORAGE_KEY, defaultWorkspaceData } from "@/lib/default-data";
-import { renderWithProvider } from "@/test/test-utils";
+import { renderWithProvider, signInWithWorkspace } from "@/test/test-utils";
 
 const pushSpy = vi.fn();
 
@@ -14,13 +14,9 @@ vi.mock("next/navigation", () => ({
 
 describe("TopNav", () => {
   it("toggles theme and persists the preference", async () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...defaultWorkspaceData,
-        settings: { ...defaultWorkspaceData.settings, theme: "light" },
-      }),
-    );
+    signInWithWorkspace({
+      settings: { ...defaultWorkspaceData.settings, theme: "light" },
+    });
     const user = userEvent.setup();
 
     renderWithProvider(<TopNav onOpenSidebar={() => undefined} />);
@@ -36,7 +32,7 @@ describe("TopNav", () => {
   });
 
   it("searches descriptions and supports keyboard selection", async () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultWorkspaceData));
+    signInWithWorkspace();
     const user = userEvent.setup();
 
     renderWithProvider(<TopNav onOpenSidebar={() => undefined} />);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/forms/field";
 import { DownloadIcon, UploadIcon, UserIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ function SettingsEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<WorkspaceSettings>(initialSettings);
   const [saved, setSaved] = useState(false);
+  const [pendingImport, setPendingImport] = useState<WorkspaceData | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const hasChanges = JSON.stringify(form) !== JSON.stringify(initialSettings);
 
   return (
@@ -257,23 +260,27 @@ function SettingsEditor({
                     try {
                       const content = e.target?.result as string;
                       const parsed = JSON.parse(content);
-                      // A more robust validation would go here
-                      if (
-                        parsed.tasks &&
-                        parsed.projects &&
-                        parsed.notes &&
-                        parsed.links &&
-                        parsed.settings
-                      ) {
-                        onImport(parsed);
-                        alert("Workspace imported successfully!");
+                      const looksLikeExport =
+                        parsed &&
+                        typeof parsed === "object" &&
+                        Array.isArray(parsed.tasks) &&
+                        Array.isArray(parsed.projects) &&
+                        Array.isArray(parsed.notes) &&
+                        Array.isArray(parsed.links) &&
+                        Boolean(parsed.settings);
+
+                      if (looksLikeExport) {
+                        // Confirm before applying: an import replaces workspace
+                        // content, and that change syncs to every member.
+                        setImportStatus(null);
+                        setPendingImport(parsed as WorkspaceData);
                       } else {
-                        alert(
-                          "The selected file does not appear to be a valid Work Hub workspace export.",
+                        setImportStatus(
+                          "That file does not look like a Work Hub export.",
                         );
                       }
                     } catch {
-                      alert("Could not read the selected file.");
+                      setImportStatus("Could not read the selected file.");
                     }
                   };
                   reader.readAsText(file);
@@ -291,9 +298,27 @@ function SettingsEditor({
                 Import Workspace
               </Button>
             </div>
+
+            {importStatus ? (
+              <p className="text-xs text-[var(--muted)]">{importStatus}</p>
+            ) : null}
           </div>
         </Surface>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingImport)}
+        title="Replace workspace content?"
+        description="Importing overwrites the tasks, projects, notes, links, and recycle bin in this workspace."
+        confirmLabel="Import and replace"
+        body="Everyone in this workspace sees the imported content once it syncs. Your workspace name, owner, and member list are left unchanged."
+        onCancel={() => setPendingImport(null)}
+        onConfirm={() => {
+          if (pendingImport) onImport(pendingImport);
+          setPendingImport(null);
+          setImportStatus("Workspace imported.");
+        }}
+      />
     </div>
   );
 }

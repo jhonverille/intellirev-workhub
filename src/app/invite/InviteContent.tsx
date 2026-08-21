@@ -83,6 +83,9 @@ export default function InvitePageClient({ inviteId }: { inviteId: string }) {
             photoURL: user.photoURL,
             role: "member",
             joinedAt: new Date().toISOString(),
+            // Named so the security rules can verify the invite server-side
+            // rather than trusting the checks this component just made.
+            inviteId,
           }
         });
 

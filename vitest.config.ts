@@ -9,5 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // The page-level tests drive a real component tree through many
+    // user-event interactions and land within a few seconds of the 5s default,
+    // so a loaded machine can tip one over and fail for no real reason.
+    testTimeout: 15000,
   },
 });

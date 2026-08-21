@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { filterViewable } from "@/lib/visibility";
 import { useWorkHub } from "@/lib/work-hub-store";
 import { makeId, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -82,25 +83,23 @@ export default function TeamPage() {
 
   // Entity counts visible to this user
   const entityCounts = useMemo(() => {
-    const visibleTasks = data.tasks.filter(
-      (t) => t.visibility !== "private" || t.ownerId === user?.uid || t.assigneeIds?.includes(user?.uid ?? "")
-    );
-    const visibleProjects = data.projects.filter(
-      (p) => p.visibility !== "private" || p.ownerId === user?.uid || p.assigneeIds?.includes(user?.uid ?? "")
-    );
-    const visibleNotes = data.notes.filter(
-      (n) => n.visibility !== "private" || n.ownerId === user?.uid || n.assigneeIds?.includes(user?.uid ?? "")
-    );
     return {
-      tasks: visibleTasks.length,
-      projects: visibleProjects.length,
-      notes: visibleNotes.length,
-      links: data.links.length,
+      tasks: filterViewable(data.tasks, user?.uid).length,
+      projects: filterViewable(data.projects, user?.uid).length,
+      notes: filterViewable(data.notes, user?.uid).length,
+      links: filterViewable(data.links, user?.uid).length,
     };
   }, [data, user]);
 
   const handleGenerateInvite = async () => {
     if (!currentWorkspaceId || !user) return;
+    // Mirrors firestore.rules: only the owner may mint an invite. The button is
+    // already owner-only, so this is here to fail clearly rather than as a
+    // raw permission error if the UI ever gets out of step with the role.
+    if (!isOwner) {
+      alert("Only the workspace owner can create invite links.");
+      return;
+    }
     setGenerating(true);
     try {
       const inviteId = makeId();

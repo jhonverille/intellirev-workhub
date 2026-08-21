@@ -1,12 +1,11 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TasksPage from "@/app/(workspace)/tasks/page";
-import { STORAGE_KEY, defaultWorkspaceData } from "@/lib/default-data";
-import { renderWithProvider } from "@/test/test-utils";
+import { renderWithProvider, signInWithWorkspace } from "@/test/test-utils";
 
 describe("TasksPage", () => {
   it("creates, edits, and deletes a task", async () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultWorkspaceData));
+    signInWithWorkspace();
     const user = userEvent.setup();
 
     renderWithProvider(<TasksPage />);
@@ -51,7 +50,7 @@ describe("TasksPage", () => {
   });
 
   it("filters and clears task results", async () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultWorkspaceData));
+    signInWithWorkspace();
     const user = userEvent.setup();
 
     renderWithProvider(<TasksPage />);
